@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<title>PresAI — Presupuesto de Obra</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ff:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+  --navy:#1e3a5f;--navy-lt:#e8eef7;--amber:#b45309;--amber-lt:#fffbeb;
+  --green:#166534;--green-lt:#dcfce7;--magenta:#d946ef;--magenta-lt:#f3e8ff;
+  --red:#991b1b;--red-lt:#fef2f2;--border:#e2e8f0;--border2:#cbd5e1;
+  --bg:#fff;--bg2:#f8fafc;--bg3:#f1f5f9;--txt:#0f172a;--txt2:#64748b;--txt3:#94a3b8;
+  --font-scale: 1;
+}
+body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-scale));background:var(--bg3);min-height:100vh}
+
+/* CHANGE 5: AI Chat dialog */
+.ai-chat-overlay {
+  display: none;
+  position: fixed;
+  z-index: 98;
+}
+.ai-chat-hdr {
+  background: var(--navy);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: move;
+}
+.ai-chat-hdr-left { display: flex; align-items: center; gap: 8px; }
+.ai-chat-hdr-title { color: #fff; font-weight: 700; font-size: 13px; }
+.ai-chat-hdr-sub { color: rgba(255,255,255,0.6); font-size: 10px; font-family: var(--mono); }
+.ai-chat-close { color: rgba(255,255,255,0.7); cursor: pointer; font-size: 16px; background: none; border: none; padding: 2px 6px; border-radius: 4px; line-height: 1; }
+.ai-chat-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.ai-chat-body {
+  padding: 14px;
+  height: 200px;
+  overflow-y: auto;
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-chat-msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.ai-chat-msg .bubble {
+  background: var(--navy);
+  color: white;
+  border-radius: 12px 12px 12px 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 85%;
+}
+.ai-chat-msg.user .bubble {
+  background: var(--amber);
+  border-radius: 12px 12px 4px 12px;
+  margin-left: auto;
+}
+.ai-dev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: rgba(255,255,255,0.85);
+  font-family: var(--mono);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.ai-chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+.ai-chat-attach {
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--txt2);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.ai-chat-attach:hover { background: var(--navy-lt); color: var(--navy); border-color: var(--navy); }
+.ai-chat-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-family: var(--ff);
+  outline: none;
+  background: var(--bg2);
+  color: var(--txt);
+}
+.ai-chat-input:focus { border-color: var(--navy); background: var(--bg); }
+.ai-chat-mic {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--navy);
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+}
+.ai-chat-mic:hover { background: var(--amber); transform: scale(1.1); }
+
+/* CHANGE 5: Draggable float button */
+.float-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #0f2040 60%, #1a4a8a 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(30,58,95,0.55), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+  cursor: grab;
+  z-index: 99;
+  transition: transform 0.2s, box-shadow 0.2s;
+  user-select: none;
+  touch-action: none;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.float-btn:hover { transform: scale(1.06) translateY(-2px); box-shadow: 0 8px 24px rgba(30,58,95,0.65), 0 2px 6px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.18); }
+.float-btn.dragging { cursor: grabbing; transform: scale(1.12); box-shadow: 0 12px 32px rgba(0,0,0,0.5); }
+.float-btn svg { width: 24px; height: 24px; }
+
+/* ── AI CHAT SPLIT MODE ── */
+.ai-chat-dialog {
+  position: fixed;
+  width: 320px;
+  background: var(--bg);
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 98;
+  display: none;
+  flex-direction: column;
+  transition: border-radius 0.25s, box-shadow 0.25s;
+}
+.ai-chat-dialog.show { display: flex; }
+.ai-chat-dialog.split-mode {
+  position: fixed !important;
+  top: 0 !important; right: 0 !important; bottom: 0 !important; left: auto !important;
+  width: 360px !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+  border-left: 2px solid var(--border) !important;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.18) !important;
+}
+.ai-chat-dialog.split-mode .ai-chat-body { height: calc(100vh - 112px); }
+#main-app.chat-split { margin-right: 360px; }
+
+/* Draggable header cursor */
+.ai-chat-hdr { cursor: move; }
+
+.app{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh;width:100%}
+
+/* ── ROTATION WARNING ── */
+#rotate-warning {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: var(--navy);
+  color: white;
+  z-index: 9999;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+#rotate-warning svg { width: 64px; height: 64px; margin-bottom: 20px; fill: white; }
+#rotate-warning h2 { font-size: 20px; margin-bottom: 10px; }
+#rotate-warning p { font-size: 14px; opacity: 0.8; }
+
+@media screen and (orientation: portrait) and (max-width: 1024px) {
+  #rotate-warning { display: flex; }
+  .app { display: none; }
+}
+
+/* CHANGE 7: WOW SCREEN with full background image */
+#wow-screen {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  color: white;
+  z-index: 1000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  overflow: hidden;
+}
+#wow-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--wow-bg-image);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+#wow-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(10,20,50,0.72) 0%, rgba(5,15,40,0.65) 100%);
+  z-index: 1;
+}
+#wow-screen > * { position: relative; z-index: 2; }
+#wow-screen h1 { font-size: clamp(36px,8vw,72px); margin-bottom: 8px; font-weight: 700; letter-spacing:-2px; text-shadow: 0 2px 20px rgba(0,0,0,0.5); }
+#wow-screen h1 span { color: #93c5fd; }
+#wow-screen p { font-size: clamp(13px,2vw,18px); opacity: 0.8; margin-bottom: 40px; }
+#wow-screen .wow-buttons { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+#wow-screen .wow-btn { padding: 13px 32px; border-radius: 10px; border: none; cursor: pointer; font-size: clamp(13px,1.5vw,15px); font-weight: 700; font-family: var(--ff); transition: all 0.2s; }
+#wow-screen .wow-btn.primary { background: #b45309; color: #fff; box-shadow: 0 4px 20px rgba(180,83,9,0.5); }
+#wow-screen .wow-btn.primary:hover { background: #92400e; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(180,83,9,0.6); }
+#wow-screen .wow-btn.secondary { background: rgba(255,255,255,0.15); color: white; border: 1.5px solid rgba(255,255,255,0.4); backdrop-filter: blur(6px); }
+#wow-screen .wow-btn.secondary:hover { background: rgba(255,255,255,0.25); transform: translateY(-2px); }
+
+/* ── HEADER ── */
+.hdr{background:var(--navy);display:flex;flex-wrap:wrap;align-items:center;position:sticky;top:0;z-index:100;box-shadow:0 2px 10px rgba(0,0,0,0.3)}
+.hdr-left{display:flex;align-items:center;gap:10px;padding:9px 16px;flex:1;min-width:200px}
+.hdr-logo-wrap{width:38px;height:38px;min-width:38px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;border:1px solid rgba(255,255,255,0.2)}
+.hdr-logo-wrap img,.hdr-logo-wrap svg{max-width:100%;max-height:100%;object-fit:contain}
+.hdr-logo-wrap svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:1.5;stroke-linecap:round}
+.hdr-txt .name{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.3px}
+.hdr-txt .name span{color:#93c5fd}
+.hdr-txt .sub{font-size:9px;color:rgba(255,255,255,0.5);font-family:var(--mono)}
+.hdr-proj{display:flex;flex-direction:column;gap:1px;margin-left:12px;padding-left:12px;border-left:1px solid rgba(255,255,255,0.15);min-width:0;max-width:320px}
+.hdr-proj-name{font-size:11px;font-weight:500;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-right{display:flex;align-items:center;gap:6px;padding:6px 12px;flex-shrink:0}
+.hdr-sep{width:1px;height:24px;background:rgba(255,255,255,0.2);margin:0 4px;flex-shrink:0}
+.hbtn{height:30px;padding:0 9px;border:1px solid rgba(255,255,255,0.22);border-radius:6px;background:rgba(255,255,255,0.1);cursor:pointer;display:flex;align-items:center;gap:4px;color:rgba(255,255,255,0.85);font-size:10px;font-family:var(--ff);font-weight:500;white-space:nowrap;transition:all .2s}
+.hbtn:hover{background:rgba(255,255,255,0.2);color:#fff}
+.hbtn:disabled{opacity:0.5;cursor:not-allowed}
+.hbtn-emoji{height:34px;min-width:34px;padding:0 8px;border:1px solid rgba(255,255,255,0.22);border-radius:7px;background:rgba(255,255,255,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;color:rgba(255,255,255,0.9);font-size:16px;font-family:var(--ff)}
+.hbtn-emoji:hover{background:rgba(255,255,255,0.2)}
+.hbtn-emoji.danger:hover{background:var(--red);color:#fff}
+.hbtn-emoji .lbl{font-size:10px;font-weight:700;margin-left:4px;text-transform:uppercase}
+
+/* ── TABS ── */
+.tabs{background:var(--bg);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);position:sticky;top:56px;z-index:90}
+.tabs-list{display:flex}
+.tab{padding:12px 18px;font-size:12px;font-weight:600;color:var(--txt2);cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;text-transform:uppercase;letter-spacing:.5px}
+.tab:hover{color:var(--navy);background:var(--navy-lt)}
+.tab.on{color:var(--navy);border-bottom-color:var(--navy);background:rgba(30,58,95,0.05)}
+
+/* ── CONTENT ── */
+.content{flex:1;padding:15px;overflow-y:auto;background:var(--bg3)}
+.pnl{display:none}.pnl.on{display:block}
+
+/* ── TABLE ── */
+.tbl-outer{background:var(--bg);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.06);overflow:hidden;margin-bottom:15px;display:flex;flex-direction:column}
+.tbl-wrap-hdr{background:var(--bg2);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:10}
+.tbl-hdr{display:grid;grid-template-columns:30px 45px 1fr 60px 80px 100px 110px 80px 30px;padding:8px 10px;font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;align-items:center}
+.tbl-hdr .r{text-align:right}.tbl-hdr .c{text-align:center}
+.tbl-wrap{overflow-x:auto;overflow-y:visible}
+.tbl-inner{min-width:850px}
+.row-it,.row-ch{display:grid;grid-template-columns:30px 45px 1fr 60px 80px 100px 110px 80px 30px;padding:6px 10px;border-bottom:1px solid var(--border);align-items:center;transition:background .15s}
+.row-it:hover{background:rgba(30,58,95,0.02)}
+.row-ch{background:var(--bg2);font-weight:700;border-bottom:2px solid var(--border2)}
+.row-it.selected{background:var(--navy-lt);outline:2px solid var(--navy);outline-offset:-2px;z-index:5}
+.ri{font-family:var(--ff);font-size:calc(13px * var(--font-scale));border:none;background:transparent;outline:none;padding:4px;width:100%;color:var(--txt)}
+.ri.ch{font-weight:700;color:var(--navy);font-size:calc(14px * var(--font-scale))}
+.ri.mono{font-family:var(--mono);font-size:calc(12px * var(--font-scale))}
+.ri.r{text-align:right}.ri.c{text-align:center}
+.ri:focus{background:rgba(255,255,255,0.8);box-shadow:inset 0 0 0 1px var(--border2);border-radius:4px}
+.span-tot{font-family:var(--mono);font-size:calc(13px * var(--font-scale));font-weight:600;text-align:right;padding-right:5px;color:var(--txt)}
+.span-ch-tot{font-family:var(--mono);font-size:calc(14px * var(--font-scale));font-weight:700;text-align:right;padding-right:5px;color:var(--navy)}
+.span-acts{display:flex;gap:4px;justify-content:center;opacity:0.3;transition:opacity .2s}
+.row-it:hover .span-acts,.row-ch:hover .span-acts{opacity:1}
+.bs{padding:4px 8px;font-size:10px;font-weight:600;border-radius:5px;cursor:pointer;border:1px solid var(--border2);background:var(--bg);color:var(--txt2);font-family:var(--ff);transition:all .15s}
+.bs:hover{border-color:var(--navy);color:var(--navy);background:var(--navy-lt)}
+.bs.del:hover{border-color:var(--red);color:var(--red);background:var(--red-lt)}
+.bs.addp{background:var(--navy);color:#fff;border-color:var(--navy)}
+.bs.addp:hover{background:#0f2040;transform:translateY(-1px)}
+.bs.apu.done,.bs.cub.done{background:var(--magenta-lt);color:var(--magenta);border-color:var(--magenta)}
+.drag-handle{cursor:grab;color:var(--txt3);font-size:16px;text-align:center;user-select:none;opacity:0.4}
+.drag-handle:hover{opacity:1;color:var(--navy)}
+.dragging{opacity:0.5;background:var(--navy-lt) !important}
+.drag-over-top{border-top:3px solid var(--navy) !important}
+.drag-over-bottom{border-bottom:3px solid var(--navy) !important}
+
+/* ── TOTALS CARD ── */
+.tot-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-wrap:wrap;gap:20px;box-shadow:0 10px 30px rgba(0,0,0,0.05)}
+.totals-left{flex:1;min-width:300px}
+.tr2{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.tr2.sep{border-top:2px solid var(--border2);margin-top:8px;padding-top:10px}
+.tr2.grand{border-bottom:none;font-size:18px;font-weight:700;color:var(--navy);padding-top:12px}
+.tr2 .tl{color:var(--txt2);font-weight:500}
+.tr2 .tv{font-family:var(--mono);font-weight:600}
+.words-row{margin-top:12px;font-size:11px;color:var(--txt2);font-style:italic;text-align:right;border-top:1px dashed var(--border);padding-top:8px}
+
+.cfg-side{width:260px;padding-left:20px;border-left:1px solid var(--border2)}
+.cfg-lbl{font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.cr{margin-bottom:10px}
+.cr label{display:block;font-size:11px;color:var(--txt2);margin-bottom:4px;font-weight:500}
+.cr input{width:100%;padding:6px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--mono);font-size:13px;outline:none;transition:all .2s}
+.cr input:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(30,58,95,0.1)}
+
+/* ── MODAL ── */
+.ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1100;overflow-y:auto;padding:20px}
+.modal{background:var(--bg);border-radius:12px;width:100%;max-width:780px;margin:0 auto;border:1px solid var(--border);box-shadow:0 20px 50px rgba(0,0,0,.2);overflow:hidden}
+.mh{padding:13px 16px;background:var(--navy);display:flex;justify-content:space-between;align-items:center}
+.mh h3{font-size:13px;font-weight:600;color:#fff}
+.mb{padding:14px;overflow-y:auto;max-height:480px}
+.mf{padding:11px 14px;background:var(--bg2);border-top:1px solid var(--border2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.btn-p{font-family:var(--ff);font-size:12px;font-weight:500;padding:7px 14px;border-radius:6px;cursor:pointer;border:none;color:#fff}
+.btn-p.blue{background:var(--navy)}.btn-p.amber{background:var(--amber)}
+.btn-p:hover{opacity:.87}
+.btn-s{font-family:var(--ff);font-size:12px;padding:7px 12px;border-radius:6px;cursor:pointer;background:var(--bg);color:var(--txt2);border:1px solid var(--border2)}
+.btn-s:hover{background:var(--bg2)}
+
+/* CHANGE: Cajetín para dígito verificador */
+.rut-box { display: inline-flex; align-items: center; gap: 2px; }
+.rut-dv { width: 18px; height: 18px; border: 1px solid #ccc; display: inline-flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10px; font-weight: 700; margin-left: 4px; border-radius: 2px; background: #f9f9f9; }
+
+@media print {
+  @page { size: landscape; margin: 10mm 10mm 20mm 10mm; }
+  body { background: #fff; font-size: 11pt; }
+  .no-print { display: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="main-app">
+  <header class="hdr no-print">
+    <div class="hdr-left">
+      <div class="hdr-txt" id="hdrBrand">
+        <div class="name">Pres<span>AI</span></div>
+        <div class="sub" id="hdrCompanyName">V26.7.3</div>
+      </div>
+      <div class="hdr-proj" id="hdrProj">
+        <div class="hdr-proj-name" id="hdrProjName">Sin proyecto</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <button class="hbtn-emoji" onclick="openProjects()" title="Mis Proyectos">📂</button>
+      <button class="hbtn-emoji" onclick="doPrint()" title="Imprimir PDF">🖨️</button>
+      <button class="hbtn-emoji" onclick="previewReport()" title="Vista Previa">👁️</button>
+      <button class="hbtn-emoji" id="save-main-btn" onclick="saveProject()" title="Guardar proyecto">💾</button>
+      <div class="hdr-sep"></div>
+      <button class="hbtn-emoji" onclick="openSettings()" title="Configuración">⚙️</button>
+    </div>
+  </header>
+
+  <nav class="tabs no-print">
+    <div class="tabs-list">
+      <div class="tab on" onclick="sw('bud',this)">Presupuesto</div>
+      <div class="tab" onclick="sw('gg',this)">Gastos Generales</div>
+      <div class="tab" id="tab-apu" onclick="sw('apu',this)">Análisis Unitarios</div>
+      <div class="tab" id="tab-cub" onclick="sw('cub',this)">Cubicaciones</div>
+      <div class="tab" id="tab-notes" onclick="sw('notes',this)">Notas</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;padding-right:10px">
+      <button id="tabs-undo-btn" onclick="undoMain()" title="Deshacer" style="display:none">↩ Deshacer</button>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div id="p-bud" class="pnl on">
+      <input type="hidden" id="pObra" value=""/>
+      <input type="hidden" id="pMandante" value=""/>
+      <input type="hidden" id="pUbicacion" value=""/>
+      <input type="hidden" id="pProfesional" value=""/>
+      <input type="hidden" id="pFecha" value=""/>
+      <input type="hidden" id="pPayment" value=""/>
+      <input type="hidden" id="pExecution" value=""/>
+      <div class="tbl-outer">
+        <div class="tbl-wrap-hdr">
+          <div class="tbl-hdr">
+            <span></span><span>Ítem</span><span>Descripción de la Partida</span><span class="c">Unid</span><span class="r">Cant.</span><span class="r" id="hdr-punit">P.Unit. ($)</span><span class="r" id="hdr-total">Total ($)</span><span></span><span></span>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <div class="tbl-inner">
+            <div id="brows"></div>
+            <div class="tbl-add no-print">
+              <button class="bs addp" onclick="addCh()">+ Nuevo Capítulo</button>
+              <button class="bs addp" onclick="addIt()">+ Nueva Partida</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tot-card">
+        <div id="totals" class="totals-left"></div>
+        <div class="cfg-side no-print">
+          <div class="cfg-lbl">Parámetros de Cálculo</div>
+          <div class="cr">
+            <label><input type="checkbox" id="ggFijo" onchange="rc();markUnsaved()"/> Gastos Generales (%)</label>
+            <input type="number" id="pGG" value="15" oninput="rc();markUnsaved()"/>
+          </div>
+          <div class="cr"><label>Utilidad (%)</label><input type="number" id="pUtil" value="12" oninput="rc();markUnsaved()"/></div>
+          <div class="cr"><label>Imprevistos (%)</label><input type="number" id="pImp" value="0" oninput="rc();markUnsaved()"/></div>
+          <div class="cr"><label>IVA (%)</label><input type="number" id="pIVA" value="19" oninput="rc();markUnsaved()"/></div>
+        </div>
+      </div>
+    </div>
+    <div id="p-gg" class="pnl"><div id="gg-subgroups-container"></div></div>
+    <div id="p-apu" class="pnl"><div id="apu-list-grid"></div></div>
+    <div id="p-cub" class="pnl"><div id="cub-list-grid"></div></div>
+    <div id="p-notes" class="pnl"><div id="general-notes-list"></div></div>
+  </main>
+</div>
+
+<div class="ov" id="ov"><div id="mc"></div></div>
+
+<script>
+let items = [];
+let apuData = {};
+let tofData = {};
+let cubSpaces = [];
+let itemImages = {};
+let generalNotes = [];
+let ggSubgroups = [];
+let currentProjectId = null;
+let isDirty = false;
+let undoStackMain = [];
+
+const CFG_DEF = {
+  companyName: '', companyTagline: '', companyRut: '', colorHeader: '#1e3a5f',
+  currency: 'CLP', parity: 1, decimalsQty: 3, decimalsQtyBudget: 2, decimalsPrice: 0, decimalsBudget: 0,
+  printBudgetNum: true, fontScale: 1, pageSize: 'letter'
+};
+let CFG = Object.assign({}, CFG_DEF);
+
+function gid(){return 'id_'+Math.random().toString(36).substr(2,9);}
+function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function N(v){return parseFloat(v)||0;}
+function fmtN(n,d){return n.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtQ(n){return fmtN(n,CFG.decimalsQty);}
+function fmtQBudget(n){return fmtN(n,CFG.decimalsQtyBudget);}
+function fmtP(n){return fmtN(n,CFG.decimalsPrice);}
+function fmtB(n){return fmtN(n,CFG.decimalsBudget);}
+function sym(){return CFG.currency==='USD'?'US$':CFG.currency==='UF'?'UF':'$';}
+
+function pushUndoMain(){ undoStackMain.push(JSON.stringify(items)); updateUndoBtn(); }
+function updateUndoBtn(){
+  let btn = document.getElementById('tabs-undo-btn');
+  if(btn){ btn.style.display = undoStackMain.length > 0 ? 'inline-flex' : 'none'; }
+}
+function undoMain(){ if(undoStackMain.length){ items = JSON.parse(undoStackMain.pop()); rb(); rc(); updateUndoBtn(); } }
+
+function reNum(){
+  var cn=0,slot2=0,itn=0,csc=0;
+  items = items.map(function(it){
+    if(it.t==='ch'){ cn++; slot2=0; itn=0; csc=0; return Object.assign({},it,{num:cn+'.-'}); }
+    if(it.isAux){ slot2++; itn=0; csc=slot2; return Object.assign({},it,{num:cn+'.'+slot2}); }
+    if(it.directToChapter||csc===0){ csc=0; slot2++; return Object.assign({},it,{num:cn+'.'+slot2}); }
+    itn++; return Object.assign({},it,{num:cn+'.'+csc+'.'+itn});
+  });
+}
+
+function ctotals(){
+  var ct={},cur=null,curSub=null;
+  items.forEach(function(it){
+    if(it.t==='ch'){cur=it.id;curSub=null;ct[it.id]=0;}
+    else if(it.isAux){curSub=it.id;ct[it.id]=0;}
+    else if(cur){
+      var tot=N(it.qty)*N(it.price);
+      if(curSub)ct[curSub]+=tot;
+      ct[cur]+=tot;
+    }
+  });
+  return ct;
+}
+
+function rb(){
+  reNum();
+  var ct=ctotals();
+  var cont=document.getElementById('brows');
+  cont.innerHTML=items.map(function(it){
+    if(it.isAux){
+      return `<div class="row-it" data-id="${it.id}" style="background-color:rgba(51,65,85,0.08);border-left:3px solid var(--navy)">
+        <span></span><span class="ri mono num-col" style="font-weight:600">${esc(it.num)}</span>
+        <input class="ri" data-field="name" data-id="${it.id}" placeholder="Partida auxiliar..." value="${esc(it.name)}" oninput="uIt('${it.id}','name',this.value)" style="font-weight:600"/>
+        <span style="text-align:center;color:#cbd5e1;font-size:12px">s/cap.</span>
+        <span></span><span></span>
+        <span class="span-tot">${fmtB(ct[it.id]||0)}</span>
+        <span class="span-acts"><button class="bs addp" onclick="addItToChapter('${it.id}')">+ Sub</button><button class="bs del" onclick="di('${it.id}')">×</button></span>
+        <span class="drag-handle">≡</span></div>`;
+    }
+    if(it.t==='ch'){
+      return `<div class="row-ch" data-id="${it.id}">
+        <span></span><span class="ri mono ch">${esc(it.num)}</span>
+        <input class="ri ch" data-field="name" data-id="${it.id}" placeholder="Capítulo..." value="${esc(it.name)}" oninput="uIt('${it.id}','name',this.value)"/>
+        <span></span><span></span><span></span>
+        <span class="span-ch-tot">${fmtB(ct[it.id]||0)}</span>
+        <span class="span-acts"><button class="bs del" onclick="di('${it.id}')">×</button></span>
+        <span class="drag-handle">≡</span></div>`;
+    }
+    var tot=N(it.qty)*N(it.price);
+    return `<div class="row-it" data-id="${it.id}">
+      <span></span><span class="ri mono">${esc(it.num)}</span>
+      <input class="ri" data-field="name" data-id="${it.id}" placeholder="Descripción..." value="${esc(it.name)}" oninput="uIt('${it.id}','name',this.value)"/>
+      <input class="ri c" data-field="unit" data-id="${it.id}" placeholder="Unid" value="${esc(it.unit)}" oninput="uIt('${it.id}','unit',this.value)"/>
+      <input class="ri r" data-field="qty" data-id="${it.id}" value="${fmtQBudget(N(it.qty))}" oninput="uIt('${it.id}','qty',this.value)"/>
+      <input class="ri r" data-field="price" data-id="${it.id}" value="${fmtP(N(it.price))}" oninput="uIt('${it.id}','price',this.value)"/>
+      <span class="span-tot">${fmtB(tot)}</span>
+      <span class="span-acts"><button class="bs del" onclick="di('${it.id}')">×</button></span>
+      <span class="drag-handle">≡</span></div>`;
+  }).join('');
+}
+
+function uIt(id,f,v){
+  var it=items.find(x=>x.id===id); if(!it)return;
+  if(f==='qty'||f==='price') v=parseFloat(v.replace(/\./g,'').replace(',','.'))||0;
+  
+  // CHANGE: Solo partidas con nombre y cant/PUnit pueden ser aux
+  if(f==='unit' && v.toLowerCase().trim()==='aux'){
+    if(!it.name || (N(it.qty)===0 && N(it.price)===0)){
+      // Alerta silenciosa (console) o visual discreta
+      console.warn('Acción rechazada: Partida debe tener nombre y cantidad o precio para ser auxiliar.');
+      rb(); return;
+    }
+    it.isAux=true; it.unit='s/cap.'; it.qty=0; it.price=0;
+    rb(); markUnsaved(); return;
+  }
+  
+  it[f]=v; rc(); markUnsaved();
+  if(f==='name') { /* no rb para no perder foco */ } else { rb(); }
+}
+
+function addIt(){
+  pushUndoMain();
+  if(!items.some(x=>x.t==='ch')) items.push({id:gid(),t:'ch',name:'',num:'1.-'});
+  // CHANGE: Solo acepta crear partidas (no subpartidas ni aux directamente)
+  items.push({id:gid(),t:'it',name:'',unit:'un',qty:1,price:0,directToChapter:true});
+  rb(); markUnsaved();
+}
+
+function addItToChapter(auxId){
+  var ci=items.findIndex(x=>x.id===auxId); if(ci<0)return;
+  pushUndoMain();
+  var last=ci;
+  for(var i=ci+1;i<items.length;i++){
+    if(items[i].t==='ch'||items[i].isAux) break;
+    last=i;
+  }
+  items.splice(last+1,0,{id:gid(),t:'it',name:'',unit:'un',qty:1,price:0});
+  rb(); markUnsaved();
+}
+
+function addCh(){ pushUndoMain(); items.push({id:gid(),t:'ch',name:''}); rb(); markUnsaved(); }
+function di(id){ pushUndoMain(); items=items.filter(x=>x.id!==id); rb(); rc(); markUnsaved(); }
+function markUnsaved(){ isDirty=true; }
+
+function rc(){
+  var dc=items.reduce((a,it)=>it.t==='it'&&!it.isAux?a+N(it.qty)*N(it.price):a,0);
+  var pGG=N(document.getElementById('pGG').value), pU=N(document.getElementById('pUtil').value), pIVA=N(document.getElementById('pIVA').value);
+  var net=dc*(1+(pGG+pU)/100), iva=net*(pIVA/100), grand=net+iva;
+  document.getElementById('totals').innerHTML=`<div class="tr2"><span>Costo Directo</span><span>${sym()} ${fmtB(dc)}</span></div><div class="tr2 grand"><span>Total General</span><span>${sym()} ${fmtB(grand)}</span></div>`;
+}
+
+function genPrintHtml(){
+  var obra=document.getElementById('pObra').value||'Sin nombre';
+  var empresa=CFG.companyName||'Empresa';
+  var rutFull=(CFG.companyRut||'').trim();
+  var rutParts=rutFull.split('-');
+  var rutNum=rutParts[0]||'';
+  var rutDv=rutParts[1]||'';
+  var color=CFG.colorHeader;
+  
+  // CHANGE: Rut y número bajo Empresa y sobre n°ppto con cajetín
+  var runHdr=`<div style="display:flex;justify-content:space-between;border-bottom:3px solid ${color};padding-bottom:8px;margin-bottom:14px">
+    <div>
+      <div style="font-size:14px;font-weight:700;color:${color}">${esc(empresa)}</div>
+      <div style="font-size:11px;color:#444;margin-top:2px">
+        RUT: ${esc(rutNum)}<span class="rut-box"><span class="rut-dv">${esc(rutDv)}</span></span>
+      </div>
+      <div style="font-size:9px;color:#888;font-family:monospace;margin-top:4px">N° PPTO: ${Date.now().toString().slice(-6)}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:12px;font-weight:600;color:${color}">${esc(obra)}</div>
+      <div style="font-size:10px;color:#64748b">${new Date().toLocaleDateString()}</div>
+    </div>
+  </div>`;
+
+  var tbody='';
+  items.forEach(it=>{
+    if(it.t==='ch') tbody+=`<tr style="background:#f0f0f0;font-weight:700"><td>${it.num}</td><td colspan="5">${esc(it.name)}</td></tr>`;
+    else if(it.isAux) tbody+=`<tr style="background:#f9f9f9;font-weight:600"><td>${it.num}</td><td>${esc(it.name)}</td><td colspan="4"></td></tr>`;
+    else tbody+=`<tr><td>${it.num}</td><td>${esc(it.name)}</td><td style="text-align:center">${esc(it.unit)}</td><td style="text-align:right">${fmtQ(it.qty)}</td><td style="text-align:right">${fmtP(it.price)}</td><td style="text-align:right">${fmtB(it.qty*it.price)}</td></tr>`;
+  });
+
+  return `<html><head><style>body{font-family:sans-serif;padding:20px}.rut-dv{width:18px;height:18px;border:1px solid #000;display:inline-flex;align-items:center;justify-content:center;font-size:10px;margin-left:4px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #eee;padding:6px;font-size:11px}</style></head><body>${runHdr}<table><thead><tr style="background:#eee"><th>Ítem</th><th>Descripción</th><th>Unid</th><th>Cant.</th><th>P.Unit</th><th>Total</th></tr></thead><tbody>${tbody}</tbody></table></body></html>`;
+}
+
+function doPrint(){ var win=window.open('','_blank'); win.document.write(genPrintHtml()); win.document.close(); setTimeout(()=>win.print(),500); }
+function previewReport(){ var win=window.open('','_blank'); win.document.write(genPrintHtml()); win.document.close(); }
+
+function openSettings(){
+  document.getElementById('ov').style.display='block';
+  document.getElementById('mc').innerHTML=`<div class="modal" style="max-width:400px"><div class="mh"><h3>Configuración</h3></div><div class="mb">
+    <div class="cr"><label>Empresa</label><input id="s-name" value="${esc(CFG.companyName)}" oninput="CFG.companyName=this.value"/></div>
+    <div class="cr"><label>RUT (ej: 12.345.678-9)</label><input id="s-rut" value="${esc(CFG.companyRut)}" oninput="CFG.companyRut=this.value"/></div>
+    <div class="cr"><label>Obra</label><input id="s-obra" value="${esc(document.getElementById('pObra').value)}" oninput="document.getElementById('pObra').value=this.value"/></div>
+  </div><div class="mf"><button class="btn-p blue" onclick="closeMod()">Cerrar</button></div></div>`;
+}
+function closeMod(){ document.getElementById('ov').style.display='none'; }
+
+function sw(id,el){
+  document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  if(el) el.classList.add('on');
+}
+
+function saveProject(){ alert('Guardado localmente'); }
+function openProjects(){ alert('Funcionalidad de proyectos cargada'); }
+
+// Init
+items = [
+  {id:gid(),t:'ch',num:'1.-',name:'OBRAS PRELIMINARES'},
+  {id:gid(),t:'it',num:'1.1',name:'Instalación de faenas',unit:'gl',qty:1,price:500000}
+];
+rb(); rc();
+</script>
+</body>
+</html>
