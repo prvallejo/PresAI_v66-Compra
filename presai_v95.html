@@ -2472,11 +2472,12 @@ function renderGGSubgroups(){
         <button class="bs del" onclick="delGGSubgroup(${sgi})">×</button>
       </div>
       <table class="gg-table">
-        <thead><tr><th style="width:260px">Descripción</th><th style="width:50px;text-align:right">Unid</th><th style="width:60px;text-align:right">Cant.</th><th style="width:80px;text-align:right">Tiempo Uso</th><th style="width:110px;text-align:right">Precio (${sym()})</th><th style="width:140px;text-align:right">Subtotal (${sym()})</th><th style="width:30px"></th></tr></thead>
+        <thead><tr><th style="width:30px"></th><th style="width:260px">Descripción</th><th style="width:50px;text-align:right">Unid</th><th style="width:60px;text-align:right">Cant.</th><th style="width:80px;text-align:right">Tiempo Uso</th><th style="width:110px;text-align:right">Precio (${sym()})</th><th style="width:140px;text-align:right">Subtotal (${sym()})</th><th style="width:30px"></th></tr></thead>
         <tbody>`;
     sg.items.forEach((it,iti)=>{
       let sub=N(it.qty)*N(it.tiempoUso)*N(it.price);
       html+=`<tr>
+        <td style="text-align:center"><input type="checkbox" ${it.visibleLM?'checked':''} onchange="uGGItem(${sgi},${iti},'visibleLM',this.checked)" title="Visible en Lista de Materiales y Filtro GG"/></td>
         <td><input value="${esc(it.desc)}" oninput="uGGItem(${sgi},${iti},'desc',this.value)"/></td>
         <td><input class="r" value="${esc(it.unit)}" oninput="uGGItem(${sgi},${iti},'unit',this.value)"/></td>
         <td><input class="r" type="text" value="${fmtQ(N(it.qty))}" oninput="uGGItem(${sgi},${iti},'qty',this.value)" onfocus="this.select()" onblur="normalizeNumericInput(this)"/></td>
@@ -2503,7 +2504,12 @@ function delGGSubgroup(sgi){if(confirm('¿Eliminar subgrupo?')){pushUndoMain();g
 function addGGItem(sgi){pushUndoMain();ggSubgroups[sgi].items.push({id:gid(),desc:'',unit:'',qty:1,price:0,tiempoUso:1});renderGGSubgroups();markUnsaved();}
 function uGGItem(sgi,iti,f,v){
   if(f==='qty'||f==='price'||f==='tiempoUso')v=parseNum(v);
-  ggSubgroups[sgi].items[iti][f]=v;
+  if(f==='visibleLM') {
+    ggSubgroups[sgi].items[iti][f]=v;
+    cmp_buildLista();
+  } else {
+    ggSubgroups[sgi].items[iti][f]=v;
+  }
   let r=ggSubgroups[sgi].items[iti];
   let sub=N(r.qty)*N(r.tiempoUso)*N(r.price);
   let subEl=document.querySelector(`[data-gg-sub="${sgi}-${iti}"]`);
@@ -4612,9 +4618,15 @@ function cmp_getFilteredLista(){
   return lista.filter(lm=>{
     if(filtroOrigen && lm.origen !== filtroOrigen) return false;
     if(filtroTxt && !lm.desc.toLowerCase().includes(filtroTxt) && !lm.origenNombre.toLowerCase().includes(filtroTxt)) return false;
-    /* Filtro espacios: si hay seleccionados, verificar que origenNombre contenga alguno */
+    /* Filtro espacios: si hay seleccionados, verificar coincidencia exacta del nombre del espacio */
     if(espSeleccionados.length > 0){
-      const match = espSeleccionados.some(esp => lm.origenNombre.toLowerCase().includes(esp.toLowerCase()) || lm.desc.toLowerCase().includes(esp.toLowerCase()));
+      const match = espSeleccionados.some(esp => {
+        const espLower = esp.toLowerCase();
+        // El origenNombre suele ser el nombre de la partida o del subgrupo de GG.
+        // Buscamos si el nombre del espacio aparece como una palabra completa o coincide exactamente.
+        const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
+        return regex.test(lm.origenNombre) || regex.test(lm.desc);
+      });
       if(!match) return false;
     }
     return true;
@@ -4689,7 +4701,7 @@ function cmp_buildLista(){
   });
   /* Fuente 3: Gastos Generales */
   ggSubgroups.forEach(sg=>{
-    sg.items.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
+    sg.items.filter(r=>r.desc&&r.desc.trim()!==''&&r.visibleLM).forEach(r=>{
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
         origen:'gg', origenId:sg.name, origenNombre:'GG: '+sg.name,
