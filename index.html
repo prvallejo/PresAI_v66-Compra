@@ -1062,9 +1062,7 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <input id="cmp-filtro-txt" type="text" placeholder="Buscar material…" oninput="cmp_renderLista()"
               style="font-family:var(--ff);font-size:calc(12px * var(--font-scale));padding:5px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--txt);min-width:200px">
             <span id="cmp-lista-count" style="font-size:calc(11px * var(--font-scale));color:var(--txt2);margin-left:4px"></span>
-            <span id="cmp-sel-count" style="font-size:calc(11px * var(--font-scale));color:var(--green);font-weight:600;margin-left:8px;display:none">0 seleccionados</span>
             <div style="flex:1"></div>
-            <button class="bs" id="cmp-btn-sel-sc" onclick="cmp_addSelectedToSC()" style="background:#059669;color:#fff;border-color:#059669;font-weight:600;display:none;font-size:11px;padding:5px 10px">→ Seleccionados a SC</button>
             <label style="font-size:calc(11px * var(--font-scale));color:var(--txt2);display:flex;align-items:center;gap:5px">
               <input type="checkbox" id="cmp-chk-agrupar" onchange="cmp_renderLista()" checked style="accent-color:var(--navy)"> Agrupar por origen
             </label>
@@ -1080,8 +1078,6 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <table id="cmp-lista-tbl" style="width:100%;border-collapse:collapse;display:none">
               <thead>
                 <tr style="background:var(--navy);color:#fff">
-                  <th style="padding:8px 6px;text-align:center;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff);width:32px"><input type="checkbox" id="cmp-chk-all" onchange="cmp_toggleAllCheckboxes(this.checked)" style="accent-color:#fff"></th>
-                  <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff);width:50px">Nº</th>
                   <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Descripción</th>
                   <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Origen</th>
                   <th style="padding:8px 6px;text-align:center;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Unid.</th>
@@ -1893,8 +1889,7 @@ function reNum(){
     }
     if(it.isAux){
       slot2++;itn=0;csc=slot2;lastAuxIdx=idx;
-      /* Asegurar que el subcapítulo no tenga el flag de partida directa */
-      return Object.assign({},it,{num:cn+'.'+slot2, directToChapter:false});
+      return Object.assign({},it,{num:cn+'.'+slot2});
     }
     /* Partida directa al capítulo (marcada o sin aux activo) */
     if(it.directToChapter||csc===0){
@@ -1906,8 +1901,7 @@ function reNum(){
     }
     /* Subpartida bajo el aux activo */
     itn++;
-    /* Asegurar que las subpartidas no tengan el flag de partida directa para que sumen al aux */
-    return Object.assign({},it,{num:cn+'.'+csc+'.'+itn, directToChapter:false});
+    return Object.assign({},it,{num:cn+'.'+csc+'.'+itn});
   });
 }
 function ctotals(){
@@ -1916,14 +1910,12 @@ function ctotals(){
     if(it.t==='ch'){cur=it.id;curSub=null;ct[it.id]=0;}
     else if(it.isAux){curSub=it.id;ct[it.id]=0;}
     else if(cur){
-      /* Si la partida es directa al capítulo (no tiene padre aux), cerrar el contexto de subpartida activa */
+      /* BUGFIX v92: Si la partida es directa al capítulo, cerrar el contexto de subpartida activa */
       if(it.directToChapter) curSub=null;
       
       var tot=N(it.qty)*N(it.price);
-      /* Sumar al subcapítulo auxiliar si existe uno activo */
-      if(curSub) ct[curSub] = (ct[curSub] || 0) + tot;
-      /* Sumar siempre al total del capítulo */
-      ct[cur] = (ct[cur] || 0) + tot;
+      if(curSub)ct[curSub]+=tot;
+      ct[cur]+=tot;
     }
   });
   return ct;
@@ -2098,48 +2090,16 @@ function initEvents(){
     }
     if(f==='qty'||f==='price')v=parseNum(v);
     
-    /* Restitución de función AUX: Si UNID es "aux", convertir partida en subcapítulo auxiliar */
-    if(f==='unit'){
-      let isNowAux = v.toLowerCase().trim() === 'aux';
-      if(isNowAux !== it.isAux){
-        pushUndoMain();
-        items = items.map(x => {
-          if(x.id !== id) return x;
-          let o = Object.assign({}, x);
-          o.isAux = isNowAux;
-          o.unit = v;
-          if(isNowAux){
-            o.qty = 0; o.price = 0;
-            delete o.directToChapter;
-          } else {
-            o.qty = 1; o.price = 0;
-            o.directToChapter = true;
-          }
-          return o;
-        });
-        rb(); markUnsaved();
-        return;
-      }
+    /* BUGFIX v93: Se elimina la transformación de partida a aux por texto en unidad. */
+    if(f==='unit'&&v.toLowerCase().replace(/_/g,'').trim()==='aux'){
+      return;
     }
     
     items=items.map(function(x){if(x.id!==id)return x;var o=Object.assign({},x);o[f]=v;return o;});
-    /* BUGFIX: Recalcular jerarquía y totales inmediatamente para reflejar cambios en aux */
-    reNum();
     var ct=ctotals();
     items.forEach(function(it){
       var row=document.querySelector(`.row-it[data-id="${it.id}"], .row-ch[data-id="${it.id}"]`);
-      if(row){
-        var ts=row.querySelector('.span-ch-tot, .span-tot');
-        if(ts){
-          /* Si es capítulo o subcapítulo (aux), usar el total acumulado en ct */
-          if(it.t==='ch' || it.isAux) ts.textContent=fmtB(ct[it.id]||0);
-          /* Si es partida normal, calcular su total individual */
-          else ts.textContent=fmtB(N(it.qty)*N(it.price));
-        }
-        /* Actualizar también el número de ítem en el DOM si cambió por reNum */
-        var ns=row.querySelector('.num-col');
-        if(ns) ns.textContent=it.num;
-      }
+      if(row){var ts=row.querySelector('.span-ch-tot, .span-tot');if(ts)ts.textContent=(it.t==='ch'?fmtB(ct[it.id]||0):fmtB(N(it.qty)*N(it.price)));}
     });
     rc();markUnsaved();
   });
@@ -2214,22 +2174,14 @@ function initDragDrop(){
     var targetRow=e.target.closest('.row-it,.row-ch');
     if(!targetRow||!dragSrcId||targetRow.dataset.id===dragSrcId)return;
     var targetId=targetRow.dataset.id;
-    
-    /* Reorganizar array items */
-    var srcIdx=items.findIndex(function(x){return x.id===dragSrcId;});
-    if(srcIdx===-1)return;
-    
-    /* BUGFIX v96: Calcular índice destino ANTES de extraer elementos */
-    var tgtIdx=items.findIndex(function(x){return x.id===targetId;});
-    if(tgtIdx===-1)return;
-    
-    pushUndoMain();
-    var srcItem=items[srcIdx];
-    
     /* Posición: arriba o abajo del target */
     var rect=targetRow.getBoundingClientRect();
     var insertBefore=(e.clientY<rect.top+rect.height/2);
-    
+    /* Reorganizar array items */
+    var srcIdx=items.findIndex(function(x){return x.id===dragSrcId;});
+    if(srcIdx===-1)return;
+    pushUndoMain();
+    var srcItem=items[srcIdx];
     /* Si el origen es un capítulo o subcapítulo, mover también sus items dependientes */
     var toMove=[srcItem];
     if(srcItem.t==='ch'){
@@ -2246,35 +2198,26 @@ function initDragDrop(){
         toMove.push(items[i]);
       }
     }
-    
-    /* BUGFIX v96: Calcular insertIdx ANTES de extraer elementos */
-    var insertIdx;
-    if(insertBefore){
-      insertIdx=tgtIdx;
-    } else {
-      /* Insertar después del target; si target es capítulo o aux, después de todo su bloque */
-      var endIdx=tgtIdx+1;
-      if(items[tgtIdx]&&items[tgtIdx].t==='ch'){
-        /* Si target es capítulo, avanzar hasta el siguiente capítulo */
-        while(endIdx<items.length&&items[endIdx].t!=='ch')endIdx++;
-      } else if(items[tgtIdx]&&items[tgtIdx].isAux){
-        /* BUGFIX v96: Si target es aux, avanzar hasta el siguiente capítulo o aux */
-        while(endIdx<items.length&&items[endIdx].t!=='ch'&&!items[endIdx].isAux)endIdx++;
-      }
-      insertIdx=endIdx;
-    }
-    
-    /* BUGFIX v96: Ajustar insertIdx si está después de srcIdx */
-    if(insertIdx>srcIdx){
-      insertIdx-=toMove.length;
-    }
-    
     /* Quitar elementos del array */
     items.splice(srcIdx,toMove.length);
-    
-    /* Insertar en la nueva posición */
-    items.splice.apply(items,[insertIdx,0].concat(toMove));
-    
+    /* Recalcular índice destino tras la extracción */
+    var tgtIdx=items.findIndex(function(x){return x.id===targetId;});
+    if(tgtIdx===-1){items.push.apply(items,toMove);}
+    else{
+      /* Si el destino es capítulo y se suelta dentro (abajo), insertar después del bloque del capítulo */
+      var insertIdx;
+      if(insertBefore){
+        insertIdx=tgtIdx;
+      } else {
+        /* Insertar después del target; si target es capítulo, después de todo su bloque */
+        var endIdx=tgtIdx+1;
+        if(items[tgtIdx]&&items[tgtIdx].t==='ch'){
+          while(endIdx<items.length&&items[endIdx].t!=='ch')endIdx++;
+        }
+        insertIdx=endIdx;
+      }
+      items.splice.apply(items,[insertIdx,0].concat(toMove));
+    }
     /* Limpiar flags de numeración para que reNum() recalcule correctamente tras el movimiento:
        - Subpartidas de un aux movido: limpiar directToChapter (ya no son directas al capítulo anterior)
        - Capítulo movido: limpiar directToChapter de todas sus partidas hijas */
@@ -2338,9 +2281,6 @@ function addItToChapter(chId){
   // Marcar partidas insertadas directamente desde capítulo (no desde aux)
   if(!caller.isAux){
     newItem.directToChapter=true;
-  } else {
-    // Si viene de un aux, forzar que NO sea directa al capítulo para que sume al aux
-    newItem.directToChapter=false;
   }
   items.splice(last+1,0,newItem);
   rb();markUnsaved();
@@ -2462,10 +2402,6 @@ function dupIt(id){
   pushUndoMain();
   var newId=gid();
   var clone=Object.assign({},src,{id:newId,num:''});
-  /* Si es una subpartida de un aux, asegurar que no tenga directToChapter */
-  if(!src.isAux && !src.directToChapter) {
-    delete clone.directToChapter;
-  }
   /* Clonar datos asociados si existen */
   if(apuData[id]) apuData[newId]=JSON.parse(JSON.stringify(apuData[id]));
   if(tofData[id]) tofData[newId]=JSON.parse(JSON.stringify(tofData[id]));
@@ -2481,15 +2417,14 @@ function dupIt(id){
 function di(id){
   var target=items.find(function(it){return it.id===id;});
   if(!target)return;
-  if(target.t==='ch' || target.isAux){
+  if(target.t==='ch'){
     var idx=items.findIndex(function(it){return it.id===id;});
     var toDelete=[id];
     for(var i=idx+1;i<items.length;i++){
-      if(items[i].t==='ch' || items[i].isAux)break;
+      if(items[i].t==='ch')break;
       toDelete.push(items[i].id);
     }
-    var typeName = target.t==='ch' ? 'capítulo' : 'subcapítulo (aux)';
-    var msg=toDelete.length>1?'¿Eliminar '+typeName+' y sus '+(toDelete.length-1)+' partida(s) subordinada(s)?':'¿Eliminar '+typeName+'?';
+    var msg=toDelete.length>1?'¿Eliminar capítulo y sus '+(toDelete.length-1)+' partida(s) subordinada(s)?':'¿Eliminar capítulo?';
     if(!confirm(msg))return;
     pushUndoMain();
     items=items.filter(function(it){return toDelete.indexOf(it.id)===-1;});
@@ -2537,11 +2472,12 @@ function renderGGSubgroups(){
         <button class="bs del" onclick="delGGSubgroup(${sgi})">×</button>
       </div>
       <table class="gg-table">
-        <thead><tr><th style="width:260px">Descripción</th><th style="width:50px;text-align:right">Unid</th><th style="width:60px;text-align:right">Cant.</th><th style="width:80px;text-align:right">Tiempo Uso</th><th style="width:110px;text-align:right">Precio (${sym()})</th><th style="width:140px;text-align:right">Subtotal (${sym()})</th><th style="width:30px"></th></tr></thead>
+        <thead><tr><th style="width:30px"></th><th style="width:260px">Descripción</th><th style="width:50px;text-align:right">Unid</th><th style="width:60px;text-align:right">Cant.</th><th style="width:80px;text-align:right">Tiempo Uso</th><th style="width:110px;text-align:right">Precio (${sym()})</th><th style="width:140px;text-align:right">Subtotal (${sym()})</th><th style="width:30px"></th></tr></thead>
         <tbody>`;
     sg.items.forEach((it,iti)=>{
       let sub=N(it.qty)*N(it.tiempoUso)*N(it.price);
       html+=`<tr>
+        <td style="text-align:center"><input type="checkbox" ${it.visibleLM?'checked':''} onchange="uGGItem(${sgi},${iti},'visibleLM',this.checked)" title="Visible en Lista de Materiales y Filtro GG"/></td>
         <td><input value="${esc(it.desc)}" oninput="uGGItem(${sgi},${iti},'desc',this.value)"/></td>
         <td><input class="r" value="${esc(it.unit)}" oninput="uGGItem(${sgi},${iti},'unit',this.value)"/></td>
         <td><input class="r" type="text" value="${fmtQ(N(it.qty))}" oninput="uGGItem(${sgi},${iti},'qty',this.value)" onfocus="this.select()" onblur="normalizeNumericInput(this)"/></td>
@@ -2568,7 +2504,12 @@ function delGGSubgroup(sgi){if(confirm('¿Eliminar subgrupo?')){pushUndoMain();g
 function addGGItem(sgi){pushUndoMain();ggSubgroups[sgi].items.push({id:gid(),desc:'',unit:'',qty:1,price:0,tiempoUso:1});renderGGSubgroups();markUnsaved();}
 function uGGItem(sgi,iti,f,v){
   if(f==='qty'||f==='price'||f==='tiempoUso')v=parseNum(v);
-  ggSubgroups[sgi].items[iti][f]=v;
+  if(f==='visibleLM') {
+    ggSubgroups[sgi].items[iti][f]=v;
+    cmp_buildLista();
+  } else {
+    ggSubgroups[sgi].items[iti][f]=v;
+  }
   let r=ggSubgroups[sgi].items[iti];
   let sub=N(r.qty)*N(r.tiempoUso)*N(r.price);
   let subEl=document.querySelector(`[data-gg-sub="${sgi}-${iti}"]`);
@@ -4677,9 +4618,15 @@ function cmp_getFilteredLista(){
   return lista.filter(lm=>{
     if(filtroOrigen && lm.origen !== filtroOrigen) return false;
     if(filtroTxt && !lm.desc.toLowerCase().includes(filtroTxt) && !lm.origenNombre.toLowerCase().includes(filtroTxt)) return false;
-    /* Filtro espacios: si hay seleccionados, verificar que origenNombre contenga alguno */
+    /* Filtro espacios: si hay seleccionados, verificar coincidencia exacta del nombre del espacio */
     if(espSeleccionados.length > 0){
-      const match = espSeleccionados.some(esp => lm.origenNombre.toLowerCase().includes(esp.toLowerCase()) || lm.desc.toLowerCase().includes(esp.toLowerCase()));
+      const match = espSeleccionados.some(esp => {
+        const espLower = esp.toLowerCase();
+        // El origenNombre suele ser el nombre de la partida o del subgrupo de GG.
+        // Buscamos si el nombre del espacio aparece como una palabra completa o coincide exactamente.
+        const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
+        return regex.test(lm.origenNombre) || regex.test(lm.desc);
+      });
       if(!match) return false;
     }
     return true;
@@ -4754,7 +4701,7 @@ function cmp_buildLista(){
   });
   /* Fuente 3: Gastos Generales */
   ggSubgroups.forEach(sg=>{
-    sg.items.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
+    sg.items.filter(r=>r.desc&&r.desc.trim()!==''&&r.visibleLM).forEach(r=>{
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
         origen:'gg', origenId:sg.name, origenNombre:'GG: '+sg.name,
@@ -4784,22 +4731,20 @@ function cmp_renderLista(){
   let filtered = cmp_getFilteredLista();
 
   count.textContent = filtered.length + ' ítem' + (filtered.length===1?'':'s');
-  document.getElementById('cmp-chk-all').checked = false;
 
   if(!filtered.length){ empty.style.display='block'; tbl.style.display='none'; resumen.style.display='none'; return; }
   empty.style.display='none'; tbl.style.display='table';
 
   let html='';
-  let itemIdx = 0;
   if(agrupar){
     const grupos = {};
     filtered.forEach(lm=>{ if(!grupos[lm.origenNombre]) grupos[lm.origenNombre]=[]; grupos[lm.origenNombre].push(lm); });
     Object.entries(grupos).forEach(([gnombre, gItems])=>{
-      html += `<tr class="cmp-row-group"><th colspan="9">${esc(gnombre)}</th></tr>`;
-      gItems.forEach(lm=>{ html += cmp_rowHtml(lm, itemIdx++); });
+      html += `<tr class="cmp-row-group"><th colspan="7">${esc(gnombre)}</th></tr>`;
+      gItems.forEach(lm=>{ html += cmp_rowHtml(lm); });
     });
   } else {
-    filtered.forEach(lm=>{ html += cmp_rowHtml(lm, itemIdx++); });
+    filtered.forEach(lm=>{ html += cmp_rowHtml(lm); });
   }
   tbody.innerHTML = html;
 
@@ -4807,16 +4752,13 @@ function cmp_renderLista(){
   document.getElementById('cmp-tot-mat').textContent = fmtCLP(totMat);
   resumen.style.display='flex';
   resumen.style.flexDirection='column';
-  cmp_updateSelCount();
 }
 
-function cmp_rowHtml(lm, idx){
+function cmp_rowHtml(lm){
   const badgeClass = lm.origen;
   const badgeLabel = lm.origen==='apu'?'APU':lm.origen==='partida'?'Partida':'GG';
   const scLabel = lm.enSC&&lm.enSC.length ? `<span style="color:var(--navy);font-weight:600">${lm.enSC.length} SC</span>` : `<button class="bs" onclick="cmp_addToSC('${lm.id}')" style="font-size:10px;padding:2px 7px">+ SC</button>`;
-  return `<tr class="cmp-row" data-lm-id="${lm.id}">
-    <td style="padding:7px 6px;text-align:center"><input type="checkbox" class="cmp-row-chk" value="${lm.id}" onchange="cmp_updateSelCount()" style="accent-color:var(--navy)"></td>
-    <td style="padding:7px 10px;font-size:calc(11px * var(--font-scale));font-weight:600;color:var(--navy)">${idx+1}</td>
+  return `<tr class="cmp-row">
     <td style="max-width:260px"><div style="font-weight:600;color:var(--txt)">${esc(lm.desc)}</div><div style="font-size:calc(10px * var(--font-scale));color:var(--txt2)">${esc(lm.origenNombre)}</div></td>
     <td><span class="cmp-badge ${badgeClass}">${badgeLabel}</span></td>
     <td style="text-align:center">${esc(lm.unit)}</td>
@@ -4825,67 +4767,6 @@ function cmp_rowHtml(lm, idx){
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${lm.totalRef>0?fmtCLP(lm.totalRef):'—'}</td>
     <td style="text-align:center">${scLabel}</td>
   </tr>`;
-}
-
-/* ── Gestión de selección múltiple de materiales ── */
-function cmp_toggleAllCheckboxes(checked){
-  document.querySelectorAll('.cmp-row-chk').forEach(chk=>chk.checked=checked);
-  cmp_updateSelCount();
-}
-
-function cmp_updateSelCount(){
-  const selCount = document.querySelectorAll('.cmp-row-chk:checked').length;
-  const selCountEl = document.getElementById('cmp-sel-count');
-  const btnSelSC = document.getElementById('cmp-btn-sel-sc');
-  const chkAll = document.getElementById('cmp-chk-all');
-  
-  if(selCount > 0){
-    selCountEl.textContent = selCount + ' seleccionado' + (selCount===1?'':'s');
-    selCountEl.style.display = 'inline';
-    btnSelSC.style.display = 'inline-flex';
-  } else {
-    selCountEl.style.display = 'none';
-    btnSelSC.style.display = 'none';
-  }
-  
-  /* Actualizar checkbox "Seleccionar todo" */
-  const totalChks = document.querySelectorAll('.cmp-row-chk').length;
-  if(chkAll){
-    chkAll.checked = selCount > 0 && selCount === totalChks;
-    chkAll.indeterminate = selCount > 0 && selCount < totalChks;
-  }
-}
-
-function cmp_addSelectedToSC(){
-  const selectedIds = Array.from(document.querySelectorAll('.cmp-row-chk:checked')).map(chk=>chk.value);
-  if(!selectedIds.length){ alert('Selecciona al menos un material'); return; }
-  
-  /* Crear o usar SC en borrador */
-  let sc = comprasData.solicitudes.find(s=>s.estado==='borrador');
-  if(!sc){ cmp_newSC(); sc = comprasData.solicitudes[comprasData.solicitudes.length-1]; }
-  
-  /* Agregar materiales a la SC */
-  let added = 0;
-  selectedIds.forEach(lmId=>{
-    if(!sc.items.find(si=>si.lmId===lmId)){
-      sc.items.push({lmId});
-      added++;
-      const lm = comprasData.listaMateriales.find(m=>m.id===lmId);
-      if(lm) {
-        if(!lm.enSC) lm.enSC = [];
-        if(!lm.enSC.includes(sc.id)) lm.enSC.push(sc.id);
-      }
-    }
-  });
-  
-  if(added > 0){
-    markUnsaved();
-    alert(`Se agregaron ${added} material(es) a la SC ${sc.numero}`);
-    cmp_renderLista();
-    cmp_sw('sc');
-  } else {
-    alert('Los materiales seleccionados ya están en la SC');
-  }
 }
 
 /* ── Nueva Solicitud de Cotización ── */
@@ -5971,12 +5852,10 @@ function exportXlsx(projId){
   const pitems=p.items||[];const pGGSubs=p.ggSubgroups||[];const pApuData=p.apuData||{};const pTofData=p.tofData||{};
   const pGGpct=parseFloat(p.pGG)||0;const pUtilpct=parseFloat(p.pUtil)||0;const pImppct=parseFloat(p.pImp)||0;const pIVApct=parseFloat(p.pIVA)||19;const ggFijo=p.ggFijo||false;
   const presData=[['Ítem','Descripción','Unid','Cantidad','P. Unit.','Total']];
-  // Datos de la Empresa y Proyecto
-  presData.push([`Empresa: ${CFG.companyName || '—'}`, '', '', '', '', '']);
+  // A3-A6: Datos del proyecto
   presData.push([`Proyecto: ${p.obra || '—'}`, '', '', '', '', '']);
   presData.push([`Mandante: ${p.mandante || '—'}`, '', '', '', '', '']);
   presData.push([`Ubicación: ${p.ubicacion || '—'}`, '', '', '', '', '']);
-  presData.push([`Profesional: ${p.profesional || '—'}`, '', '', '', '', '']);
   presData.push([`Fecha: ${p.fecha || '—'}`, '', '', '', '', '']);
   presData.push(['', '', '', '', '', '']);
   let cn=0,slot2=0,itn=0,csc=0;
@@ -5997,30 +5876,12 @@ function exportXlsx(projId){
     itn++;
     return Object.assign({},it,{num:cn+'.'+csc+'.'+itn});
   });
-  numbered.forEach(it=>{
-    if(it.t==='ch'||it.isAux){
-      presData.push([it.num,it.name,'','','',0]);
-      if(it.note) presData.push(['', `Nota: ${it.note}`, '', '', '', '']);
-    } else {
-      presData.push([it.num,it.name,it.unit||'',parseFloat(it.qty)||0,parseFloat(it.price)||0,{f:`D${presData.length+1}*E${presData.length+1}`}]);
-      if(it.note) presData.push(['', `Nota: ${it.note}`, '', '', '', '']);
-    }
-  });
+  numbered.forEach(it=>{if(it.t==='ch'||it.isAux)presData.push([it.num,it.name,'','','',0]);else presData.push([it.num,it.name,it.unit||'',parseFloat(it.qty)||0,parseFloat(it.price)||0,{f:`D${presData.length+1}*E${presData.length+1}`}]);});
   const dc=pitems.reduce((a,it)=>it.t==='it'&&!it.isAux?a+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0):a,0);
   const ggV=ggFijo?dc*(pGGpct/100):pGGSubs.reduce((a,sg)=>a+sg.items.reduce((b,it)=>b+(parseFloat(it.qty)||0)*(parseFloat(it.tiempoUso)||0)*(parseFloat(it.price)||0),0),0);
   const util=(dc+ggV)*(pUtilpct/100);const imp=dc*(pImppct/100);const net=dc+ggV+util+imp;const iva=net*(pIVApct/100);const grand=net+iva;
   presData.push([]);presData.push(['Costo Directo','','','','',dc]);presData.push(['Gastos Generales','','','','',ggV]);presData.push([`Utilidad (${pUtilpct}%)`,'','','','',util]);
   if(pImppct>0)presData.push([`Imprevistos (${pImppct}%)`,'','','','',imp]);presData.push(['Total Neto','','','','',net]);presData.push([`IVA (${pIVApct}%)`,'','','','',iva]);presData.push(['TOTAL GENERAL','','','','',grand]);
-  
-  // Agregar Notas Generales al final del presupuesto
-  if(generalNotes && generalNotes.length > 0){
-    presData.push([]);
-    presData.push(['NOTAS GENERALES', '', '', '', '', '']);
-    generalNotes.forEach(n => {
-      presData.push(['', n.text || '', '', '', '', '']);
-    });
-  }
-  
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(presData),"Presupuesto");
   if(CFG.printApu){
     const apuDataRows=[['Categoría','Descripción','Unid','Rendimiento','P.U.','Subtotal']];
