@@ -2119,10 +2119,23 @@ function initEvents(){
     }
     
     items=items.map(function(x){if(x.id!==id)return x;var o=Object.assign({},x);o[f]=v;return o;});
+    /* BUGFIX: Recalcular jerarquía y totales inmediatamente para reflejar cambios en aux */
+    reNum();
     var ct=ctotals();
     items.forEach(function(it){
       var row=document.querySelector(`.row-it[data-id="${it.id}"], .row-ch[data-id="${it.id}"]`);
-      if(row){var ts=row.querySelector('.span-ch-tot, .span-tot');if(ts)ts.textContent=(it.t==='ch'?fmtB(ct[it.id]||0):fmtB(N(it.qty)*N(it.price)));}
+      if(row){
+        var ts=row.querySelector('.span-ch-tot, .span-tot');
+        if(ts){
+          /* Si es capítulo o subcapítulo (aux), usar el total acumulado en ct */
+          if(it.t==='ch' || it.isAux) ts.textContent=fmtB(ct[it.id]||0);
+          /* Si es partida normal, calcular su total individual */
+          else ts.textContent=fmtB(N(it.qty)*N(it.price));
+        }
+        /* Actualizar también el número de ítem en el DOM si cambió por reNum */
+        var ns=row.querySelector('.num-col');
+        if(ns) ns.textContent=it.num;
+      }
     });
     rc();markUnsaved();
   });
@@ -2304,6 +2317,9 @@ function addItToChapter(chId){
   // Marcar partidas insertadas directamente desde capítulo (no desde aux)
   if(!caller.isAux){
     newItem.directToChapter=true;
+  } else {
+    // Si viene de un aux, forzar que NO sea directa al capítulo para que sume al aux
+    newItem.directToChapter=false;
   }
   items.splice(last+1,0,newItem);
   rb();markUnsaved();
