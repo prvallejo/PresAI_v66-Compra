@@ -5884,10 +5884,12 @@ function exportXlsx(projId){
   const pitems=p.items||[];const pGGSubs=p.ggSubgroups||[];const pApuData=p.apuData||{};const pTofData=p.tofData||{};
   const pGGpct=parseFloat(p.pGG)||0;const pUtilpct=parseFloat(p.pUtil)||0;const pImppct=parseFloat(p.pImp)||0;const pIVApct=parseFloat(p.pIVA)||19;const ggFijo=p.ggFijo||false;
   const presData=[['Ítem','Descripción','Unid','Cantidad','P. Unit.','Total']];
-  // A3-A6: Datos del proyecto
+  // Datos de la Empresa y Proyecto
+  presData.push([`Empresa: ${CFG.companyName || '—'}`, '', '', '', '', '']);
   presData.push([`Proyecto: ${p.obra || '—'}`, '', '', '', '', '']);
   presData.push([`Mandante: ${p.mandante || '—'}`, '', '', '', '', '']);
   presData.push([`Ubicación: ${p.ubicacion || '—'}`, '', '', '', '', '']);
+  presData.push([`Profesional: ${p.profesional || '—'}`, '', '', '', '', '']);
   presData.push([`Fecha: ${p.fecha || '—'}`, '', '', '', '', '']);
   presData.push(['', '', '', '', '', '']);
   let cn=0,slot2=0,itn=0,csc=0;
@@ -5908,12 +5910,30 @@ function exportXlsx(projId){
     itn++;
     return Object.assign({},it,{num:cn+'.'+csc+'.'+itn});
   });
-  numbered.forEach(it=>{if(it.t==='ch'||it.isAux)presData.push([it.num,it.name,'','','',0]);else presData.push([it.num,it.name,it.unit||'',parseFloat(it.qty)||0,parseFloat(it.price)||0,{f:`D${presData.length+1}*E${presData.length+1}`}]);});
+  numbered.forEach(it=>{
+    if(it.t==='ch'||it.isAux){
+      presData.push([it.num,it.name,'','','',0]);
+      if(it.note) presData.push(['', `Nota: ${it.note}`, '', '', '', '']);
+    } else {
+      presData.push([it.num,it.name,it.unit||'',parseFloat(it.qty)||0,parseFloat(it.price)||0,{f:`D${presData.length+1}*E${presData.length+1}`}]);
+      if(it.note) presData.push(['', `Nota: ${it.note}`, '', '', '', '']);
+    }
+  });
   const dc=pitems.reduce((a,it)=>it.t==='it'&&!it.isAux?a+(parseFloat(it.qty)||0)*(parseFloat(it.price)||0):a,0);
   const ggV=ggFijo?dc*(pGGpct/100):pGGSubs.reduce((a,sg)=>a+sg.items.reduce((b,it)=>b+(parseFloat(it.qty)||0)*(parseFloat(it.tiempoUso)||0)*(parseFloat(it.price)||0),0),0);
   const util=(dc+ggV)*(pUtilpct/100);const imp=dc*(pImppct/100);const net=dc+ggV+util+imp;const iva=net*(pIVApct/100);const grand=net+iva;
   presData.push([]);presData.push(['Costo Directo','','','','',dc]);presData.push(['Gastos Generales','','','','',ggV]);presData.push([`Utilidad (${pUtilpct}%)`,'','','','',util]);
   if(pImppct>0)presData.push([`Imprevistos (${pImppct}%)`,'','','','',imp]);presData.push(['Total Neto','','','','',net]);presData.push([`IVA (${pIVApct}%)`,'','','','',iva]);presData.push(['TOTAL GENERAL','','','','',grand]);
+  
+  // Agregar Notas Generales al final del presupuesto
+  if(generalNotes && generalNotes.length > 0){
+    presData.push([]);
+    presData.push(['NOTAS GENERALES', '', '', '', '', '']);
+    generalNotes.forEach(n => {
+      presData.push(['', n.text || '', '', '', '', '']);
+    });
+  }
+  
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(presData),"Presupuesto");
   if(CFG.printApu){
     const apuDataRows=[['Categoría','Descripción','Unid','Rendimiento','P.U.','Subtotal']];
