@@ -1889,7 +1889,8 @@ function reNum(){
     }
     if(it.isAux){
       slot2++;itn=0;csc=slot2;lastAuxIdx=idx;
-      return Object.assign({},it,{num:cn+'.'+slot2});
+      /* Asegurar que el subcapítulo no tenga el flag de partida directa */
+      return Object.assign({},it,{num:cn+'.'+slot2, directToChapter:false});
     }
     /* Partida directa al capítulo (marcada o sin aux activo) */
     if(it.directToChapter||csc===0){
@@ -1901,7 +1902,8 @@ function reNum(){
     }
     /* Subpartida bajo el aux activo */
     itn++;
-    return Object.assign({},it,{num:cn+'.'+csc+'.'+itn});
+    /* Asegurar que las subpartidas no tengan el flag de partida directa para que sumen al aux */
+    return Object.assign({},it,{num:cn+'.'+csc+'.'+itn, directToChapter:false});
   });
 }
 function ctotals(){
@@ -1910,12 +1912,14 @@ function ctotals(){
     if(it.t==='ch'){cur=it.id;curSub=null;ct[it.id]=0;}
     else if(it.isAux){curSub=it.id;ct[it.id]=0;}
     else if(cur){
-      /* BUGFIX v92: Si la partida es directa al capítulo, cerrar el contexto de subpartida activa */
+      /* Si la partida es directa al capítulo (no tiene padre aux), cerrar el contexto de subpartida activa */
       if(it.directToChapter) curSub=null;
       
       var tot=N(it.qty)*N(it.price);
-      if(curSub)ct[curSub]+=tot;
-      ct[cur]+=tot;
+      /* Sumar al subcapítulo auxiliar si existe uno activo */
+      if(curSub) ct[curSub] = (ct[curSub] || 0) + tot;
+      /* Sumar siempre al total del capítulo */
+      ct[cur] = (ct[cur] || 0) + tot;
     }
   });
   return ct;
