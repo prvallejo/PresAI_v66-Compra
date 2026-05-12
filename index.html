@@ -2090,9 +2090,28 @@ function initEvents(){
     }
     if(f==='qty'||f==='price')v=parseNum(v);
     
-    /* BUGFIX v93: Se elimina la transformación de partida a aux por texto en unidad. */
-    if(f==='unit'&&v.toLowerCase().replace(/_/g,'').trim()==='aux'){
-      return;
+    /* Restitución de función AUX: Si UNID es "aux", convertir partida en subcapítulo auxiliar */
+    if(f==='unit'){
+      let isNowAux = v.toLowerCase().trim() === 'aux';
+      if(isNowAux !== it.isAux){
+        pushUndoMain();
+        items = items.map(x => {
+          if(x.id !== id) return x;
+          let o = Object.assign({}, x);
+          o.isAux = isNowAux;
+          o.unit = v;
+          if(isNowAux){
+            o.qty = 0; o.price = 0;
+            delete o.directToChapter;
+          } else {
+            o.qty = 1; o.price = 0;
+            o.directToChapter = true;
+          }
+          return o;
+        });
+        rb(); markUnsaved();
+        return;
+      }
     }
     
     items=items.map(function(x){if(x.id!==id)return x;var o=Object.assign({},x);o[f]=v;return o;});
@@ -2402,6 +2421,10 @@ function dupIt(id){
   pushUndoMain();
   var newId=gid();
   var clone=Object.assign({},src,{id:newId,num:''});
+  /* Si es una subpartida de un aux, asegurar que no tenga directToChapter */
+  if(!src.isAux && !src.directToChapter) {
+    delete clone.directToChapter;
+  }
   /* Clonar datos asociados si existen */
   if(apuData[id]) apuData[newId]=JSON.parse(JSON.stringify(apuData[id]));
   if(tofData[id]) tofData[newId]=JSON.parse(JSON.stringify(tofData[id]));
@@ -2417,14 +2440,15 @@ function dupIt(id){
 function di(id){
   var target=items.find(function(it){return it.id===id;});
   if(!target)return;
-  if(target.t==='ch'){
+  if(target.t==='ch' || target.isAux){
     var idx=items.findIndex(function(it){return it.id===id;});
     var toDelete=[id];
     for(var i=idx+1;i<items.length;i++){
-      if(items[i].t==='ch')break;
+      if(items[i].t==='ch' || items[i].isAux)break;
       toDelete.push(items[i].id);
     }
-    var msg=toDelete.length>1?'¿Eliminar capítulo y sus '+(toDelete.length-1)+' partida(s) subordinada(s)?':'¿Eliminar capítulo?';
+    var typeName = target.t==='ch' ? 'capítulo' : 'subcapítulo (aux)';
+    var msg=toDelete.length>1?'¿Eliminar '+typeName+' y sus '+(toDelete.length-1)+' partida(s) subordinada(s)?':'¿Eliminar '+typeName+'?';
     if(!confirm(msg))return;
     pushUndoMain();
     items=items.filter(function(it){return toDelete.indexOf(it.id)===-1;});
