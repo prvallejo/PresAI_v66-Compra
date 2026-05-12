@@ -2210,14 +2210,22 @@ function initDragDrop(){
     var targetRow=e.target.closest('.row-it,.row-ch');
     if(!targetRow||!dragSrcId||targetRow.dataset.id===dragSrcId)return;
     var targetId=targetRow.dataset.id;
-    /* Posición: arriba o abajo del target */
-    var rect=targetRow.getBoundingClientRect();
-    var insertBefore=(e.clientY<rect.top+rect.height/2);
+    
     /* Reorganizar array items */
     var srcIdx=items.findIndex(function(x){return x.id===dragSrcId;});
     if(srcIdx===-1)return;
+    
+    /* BUGFIX v96: Calcular índice destino ANTES de extraer elementos */
+    var tgtIdx=items.findIndex(function(x){return x.id===targetId;});
+    if(tgtIdx===-1)return;
+    
     pushUndoMain();
     var srcItem=items[srcIdx];
+    
+    /* Posición: arriba o abajo del target */
+    var rect=targetRow.getBoundingClientRect();
+    var insertBefore=(e.clientY<rect.top+rect.height/2);
+    
     /* Si el origen es un capítulo o subcapítulo, mover también sus items dependientes */
     var toMove=[srcItem];
     if(srcItem.t==='ch'){
@@ -2234,26 +2242,35 @@ function initDragDrop(){
         toMove.push(items[i]);
       }
     }
+    
+    /* BUGFIX v96: Calcular insertIdx ANTES de extraer elementos */
+    var insertIdx;
+    if(insertBefore){
+      insertIdx=tgtIdx;
+    } else {
+      /* Insertar después del target; si target es capítulo o aux, después de todo su bloque */
+      var endIdx=tgtIdx+1;
+      if(items[tgtIdx]&&items[tgtIdx].t==='ch'){
+        /* Si target es capítulo, avanzar hasta el siguiente capítulo */
+        while(endIdx<items.length&&items[endIdx].t!=='ch')endIdx++;
+      } else if(items[tgtIdx]&&items[tgtIdx].isAux){
+        /* BUGFIX v96: Si target es aux, avanzar hasta el siguiente capítulo o aux */
+        while(endIdx<items.length&&items[endIdx].t!=='ch'&&!items[endIdx].isAux)endIdx++;
+      }
+      insertIdx=endIdx;
+    }
+    
+    /* BUGFIX v96: Ajustar insertIdx si está después de srcIdx */
+    if(insertIdx>srcIdx){
+      insertIdx-=toMove.length;
+    }
+    
     /* Quitar elementos del array */
     items.splice(srcIdx,toMove.length);
-    /* Recalcular índice destino tras la extracción */
-    var tgtIdx=items.findIndex(function(x){return x.id===targetId;});
-    if(tgtIdx===-1){items.push.apply(items,toMove);}
-    else{
-      /* Si el destino es capítulo y se suelta dentro (abajo), insertar después del bloque del capítulo */
-      var insertIdx;
-      if(insertBefore){
-        insertIdx=tgtIdx;
-      } else {
-        /* Insertar después del target; si target es capítulo, después de todo su bloque */
-        var endIdx=tgtIdx+1;
-        if(items[tgtIdx]&&items[tgtIdx].t==='ch'){
-          while(endIdx<items.length&&items[endIdx].t!=='ch')endIdx++;
-        }
-        insertIdx=endIdx;
-      }
-      items.splice.apply(items,[insertIdx,0].concat(toMove));
-    }
+    
+    /* Insertar en la nueva posición */
+    items.splice.apply(items,[insertIdx,0].concat(toMove));
+    
     /* Limpiar flags de numeración para que reNum() recalcule correctamente tras el movimiento:
        - Subpartidas de un aux movido: limpiar directToChapter (ya no son directas al capítulo anterior)
        - Capítulo movido: limpiar directToChapter de todas sus partidas hijas */
