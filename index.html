@@ -1062,7 +1062,9 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <input id="cmp-filtro-txt" type="text" placeholder="Buscar material…" oninput="cmp_renderLista()"
               style="font-family:var(--ff);font-size:calc(12px * var(--font-scale));padding:5px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--txt);min-width:200px">
             <span id="cmp-lista-count" style="font-size:calc(11px * var(--font-scale));color:var(--txt2);margin-left:4px"></span>
+            <span id="cmp-sel-count" style="font-size:calc(11px * var(--font-scale));color:var(--green);font-weight:600;margin-left:8px;display:none">0 seleccionados</span>
             <div style="flex:1"></div>
+            <button class="bs" id="cmp-btn-sel-sc" onclick="cmp_addSelectedToSC()" style="background:#059669;color:#fff;border-color:#059669;font-weight:600;display:none;font-size:11px;padding:5px 10px">→ Seleccionados a SC</button>
             <label style="font-size:calc(11px * var(--font-scale));color:var(--txt2);display:flex;align-items:center;gap:5px">
               <input type="checkbox" id="cmp-chk-agrupar" onchange="cmp_renderLista()" checked style="accent-color:var(--navy)"> Agrupar por origen
             </label>
@@ -1078,6 +1080,8 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <table id="cmp-lista-tbl" style="width:100%;border-collapse:collapse;display:none">
               <thead>
                 <tr style="background:var(--navy);color:#fff">
+                  <th style="padding:8px 6px;text-align:center;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff);width:32px"><input type="checkbox" id="cmp-chk-all" onchange="cmp_toggleAllCheckboxes(this.checked)" style="accent-color:#fff"></th>
+                  <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff);width:50px">Nº</th>
                   <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Descripción</th>
                   <th style="padding:8px 10px;text-align:left;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Origen</th>
                   <th style="padding:8px 6px;text-align:center;font-size:calc(11px * var(--font-scale));font-weight:600;font-family:var(--ff)">Unid.</th>
@@ -4780,20 +4784,22 @@ function cmp_renderLista(){
   let filtered = cmp_getFilteredLista();
 
   count.textContent = filtered.length + ' ítem' + (filtered.length===1?'':'s');
+  document.getElementById('cmp-chk-all').checked = false;
 
   if(!filtered.length){ empty.style.display='block'; tbl.style.display='none'; resumen.style.display='none'; return; }
   empty.style.display='none'; tbl.style.display='table';
 
   let html='';
+  let itemIdx = 0;
   if(agrupar){
     const grupos = {};
     filtered.forEach(lm=>{ if(!grupos[lm.origenNombre]) grupos[lm.origenNombre]=[]; grupos[lm.origenNombre].push(lm); });
     Object.entries(grupos).forEach(([gnombre, gItems])=>{
-      html += `<tr class="cmp-row-group"><th colspan="7">${esc(gnombre)}</th></tr>`;
-      gItems.forEach(lm=>{ html += cmp_rowHtml(lm); });
+      html += `<tr class="cmp-row-group"><th colspan="9">${esc(gnombre)}</th></tr>`;
+      gItems.forEach(lm=>{ html += cmp_rowHtml(lm, itemIdx++); });
     });
   } else {
-    filtered.forEach(lm=>{ html += cmp_rowHtml(lm); });
+    filtered.forEach(lm=>{ html += cmp_rowHtml(lm, itemIdx++); });
   }
   tbody.innerHTML = html;
 
@@ -4801,13 +4807,16 @@ function cmp_renderLista(){
   document.getElementById('cmp-tot-mat').textContent = fmtCLP(totMat);
   resumen.style.display='flex';
   resumen.style.flexDirection='column';
+  cmp_updateSelCount();
 }
 
-function cmp_rowHtml(lm){
+function cmp_rowHtml(lm, idx){
   const badgeClass = lm.origen;
   const badgeLabel = lm.origen==='apu'?'APU':lm.origen==='partida'?'Partida':'GG';
   const scLabel = lm.enSC&&lm.enSC.length ? `<span style="color:var(--navy);font-weight:600">${lm.enSC.length} SC</span>` : `<button class="bs" onclick="cmp_addToSC('${lm.id}')" style="font-size:10px;padding:2px 7px">+ SC</button>`;
-  return `<tr class="cmp-row">
+  return `<tr class="cmp-row" data-lm-id="${lm.id}">
+    <td style="padding:7px 6px;text-align:center"><input type="checkbox" class="cmp-row-chk" value="${lm.id}" onchange="cmp_updateSelCount()" style="accent-color:var(--navy)"></td>
+    <td style="padding:7px 10px;font-size:calc(11px * var(--font-scale));font-weight:600;color:var(--navy)">${idx+1}</td>
     <td style="max-width:260px"><div style="font-weight:600;color:var(--txt)">${esc(lm.desc)}</div><div style="font-size:calc(10px * var(--font-scale));color:var(--txt2)">${esc(lm.origenNombre)}</div></td>
     <td><span class="cmp-badge ${badgeClass}">${badgeLabel}</span></td>
     <td style="text-align:center">${esc(lm.unit)}</td>
@@ -4816,6 +4825,67 @@ function cmp_rowHtml(lm){
     <td style="text-align:right;font-family:var(--mono);font-weight:600">${lm.totalRef>0?fmtCLP(lm.totalRef):'—'}</td>
     <td style="text-align:center">${scLabel}</td>
   </tr>`;
+}
+
+/* ── Gestión de selección múltiple de materiales ── */
+function cmp_toggleAllCheckboxes(checked){
+  document.querySelectorAll('.cmp-row-chk').forEach(chk=>chk.checked=checked);
+  cmp_updateSelCount();
+}
+
+function cmp_updateSelCount(){
+  const selCount = document.querySelectorAll('.cmp-row-chk:checked').length;
+  const selCountEl = document.getElementById('cmp-sel-count');
+  const btnSelSC = document.getElementById('cmp-btn-sel-sc');
+  const chkAll = document.getElementById('cmp-chk-all');
+  
+  if(selCount > 0){
+    selCountEl.textContent = selCount + ' seleccionado' + (selCount===1?'':'s');
+    selCountEl.style.display = 'inline';
+    btnSelSC.style.display = 'inline-flex';
+  } else {
+    selCountEl.style.display = 'none';
+    btnSelSC.style.display = 'none';
+  }
+  
+  /* Actualizar checkbox "Seleccionar todo" */
+  const totalChks = document.querySelectorAll('.cmp-row-chk').length;
+  if(chkAll){
+    chkAll.checked = selCount > 0 && selCount === totalChks;
+    chkAll.indeterminate = selCount > 0 && selCount < totalChks;
+  }
+}
+
+function cmp_addSelectedToSC(){
+  const selectedIds = Array.from(document.querySelectorAll('.cmp-row-chk:checked')).map(chk=>chk.value);
+  if(!selectedIds.length){ alert('Selecciona al menos un material'); return; }
+  
+  /* Crear o usar SC en borrador */
+  let sc = comprasData.solicitudes.find(s=>s.estado==='borrador');
+  if(!sc){ cmp_newSC(); sc = comprasData.solicitudes[comprasData.solicitudes.length-1]; }
+  
+  /* Agregar materiales a la SC */
+  let added = 0;
+  selectedIds.forEach(lmId=>{
+    if(!sc.items.find(si=>si.lmId===lmId)){
+      sc.items.push({lmId});
+      added++;
+      const lm = comprasData.listaMateriales.find(m=>m.id===lmId);
+      if(lm) {
+        if(!lm.enSC) lm.enSC = [];
+        if(!lm.enSC.includes(sc.id)) lm.enSC.push(sc.id);
+      }
+    }
+  });
+  
+  if(added > 0){
+    markUnsaved();
+    alert(`Se agregaron ${added} material(es) a la SC ${sc.numero}`);
+    cmp_renderLista();
+    cmp_sw('sc');
+  } else {
+    alert('Los materiales seleccionados ya están en la SC');
+  }
 }
 
 /* ── Nueva Solicitud de Cotización ── */
