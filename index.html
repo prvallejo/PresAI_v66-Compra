@@ -4888,7 +4888,10 @@ function cmp_editSC(id){
         <div style="max-height:200px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:6px;padding:8px 10px">${itemsHtml}</div>
       </div>
       <div>
-        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:6px;font-family:var(--ff)">PROVEEDORES</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);font-family:var(--ff)">PROVEEDORES</div>
+          <button class="bs" onclick="cmp_newProvFromSC()" style="font-size:10px;padding:2px 8px;background:var(--navy);color:#fff;border-color:var(--navy)">+ Proveedor</button>
+        </div>
         <div style="border:1.5px solid var(--border2);border-radius:6px;padding:8px 10px">${provsHtml}</div>
       </div>
       <div>
@@ -5049,14 +5052,35 @@ function cmp_shareSC_wa(id){
 function cmp_crearOCdesdeSC(scId){
   const sc = comprasData.solicitudes.find(s=>s.id===scId);
   if(!sc) return;
+  
+  /* Verificar que la SC está aceptada */
+  if(sc.estado !== 'cotizacion_aceptada'){
+    alert('Solo se pueden crear OC desde Solicitudes de Cotización aceptadas.');
+    return;
+  }
+  
   if(!confirm(`¿Crear una Orden de Compra a partir de ${sc.numero}?`)) return;
+  
   const num = 'OC-' + String(comprasData.ordenesCompra.length+1).padStart(3,'0');
   const lm = comprasData.listaMateriales;
   const ocItems = sc.items.map(si=>{
     const m = lm.find(x=>x.id===si.lmId);
     if(!m) return null;
-    return {lmId:m.id, desc:m.desc, unit:m.unit, qty:m.qty, precioUnitario:m.precioRef||0, total:(m.qty||0)*(m.precioRef||0)};
+    return {
+      lmId:m.id, 
+      desc:m.desc, 
+      unit:m.unit, 
+      qty:m.qty, 
+      precioUnitario:m.precioRef||0, 
+      total:(m.qty||0)*(m.precioRef||0)
+    };
   }).filter(Boolean);
+  
+  /* Obtener nombre del proveedor seleccionado */
+  const provNombre = sc.proveedores.length > 0 
+    ? (cmp_proveedores.find(p=>p.id===sc.proveedores[0])?.nombre || 'Proveedor')
+    : 'Proveedor';
+  
   const oc = {
     id:'oc_'+Math.random().toString(36).substr(2,8),
     numero: num,
@@ -5067,7 +5091,9 @@ function cmp_crearOCdesdeSC(scId){
     totalOC: ocItems.reduce((a,i)=>a+i.total,0),
     condPago:'',
     plazoEntrega:'',
-    notas:`Generada desde ${sc.numero}`
+    scOrigen: sc.numero,
+    scEstado: sc.estado,
+    notas:`Generada desde ${sc.numero} (${provNombre})`
   };
   comprasData.ordenesCompra.push(oc);
   markUnsaved();
@@ -5155,7 +5181,7 @@ function cmp_editOC(id){
   }).join('') : '<tr><td colspan="6" style="padding:12px;color:var(--txt2);font-size:12px">Actualiza la lista de materiales primero.</td></tr>';
 
   document.getElementById('mc').innerHTML=`<div class="modal" style="max-width:700px">
-    <div class="mh"><span style="font-weight:700;font-size:15px;color:#fff">${esc(oc.numero)} — Orden de Compra</span>
+    <div class="mh"><span style="font-weight:700;font-size:15px;color:#fff">${esc(oc.numero)} — Orden de Compra${oc.scOrigen ? ' (desde ' + esc(oc.scOrigen) + ')' : ''}</span>
       <button onclick="cmp_saveOC('${id}');closeMod()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;cursor:pointer;padding:2px 10px;border-radius:5px">✕</button>
     </div>
     <div style="padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:72vh">
@@ -5476,6 +5502,61 @@ function cmp_printOC(id){
     <script>window.onload=()=>window.print()<\/script>
   </div></body></html>`);
   win.document.close();
+}
+
+/* ── Crear proveedor desde modal de SC ── */
+function cmp_newProvFromSC(){
+  const scModal = document.getElementById('mc');
+  if(!scModal) return;
+  
+  document.getElementById('mc').innerHTML=`<div class="modal" style="max-width:500px">
+    <div class="mh"><span style="font-weight:700;font-size:15px;color:#fff">Nuevo Proveedor</span>
+      <button onclick="closeMod()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;cursor:pointer;padding:2px 10px;border-radius:5px">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      ${[['pnv-nombre','Nombre / Razón social','text','Ej: Sodimac Pro'],['pnv-rut','RUT','text','Ej: 96.928.830-8'],['pnv-contacto','Contacto','text','Nombre de contacto'],['pnv-tel','Teléfono','text','+56 9 XXXX XXXX'],['pnv-email','Email','email','cotizaciones@empresa.cl']].map(([id,lbl,type,ph])=>\`
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">\${lbl.toUpperCase()}</div>
+        <input id="\${id}" type="\${type}" placeholder="\${ph}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+      </div>\`).join('')}
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">RUBRO</div>
+        <select id="pnv-rubro" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt)">
+          <option value="materiales">Materiales</option>
+          <option value="equipos">Equipos y Herramientas</option>
+          <option value="subcontrato">Subcontrato</option>
+        </select>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px">
+        <button class="btn-p" onclick="closeMod()" style="background:var(--bg2);color:var(--txt);border:1.5px solid var(--border2)">Cancelar</button>
+        <button class="btn-p blue" onclick="cmp_saveProvFromSC()">Guardar proveedor</button>
+      </div>
+    </div>
+  </div>\`;
+  document.getElementById('ov').style.display='block';
+}
+
+function cmp_saveProvFromSC(){
+  const p = {
+    id:'prv_'+Math.random().toString(36).substr(2,8),
+    nombre:  document.getElementById('pnv-nombre').value.trim(),
+    rut:     document.getElementById('pnv-rut').value.trim(),
+    contacto:document.getElementById('pnv-contacto').value.trim(),
+    telefono:document.getElementById('pnv-tel').value.trim(),
+    email:   document.getElementById('pnv-email').value.trim(),
+    rubro:   document.getElementById('pnv-rubro').value
+  };
+  if(!p.nombre){ alert('Ingresa el nombre del proveedor.'); return; }
+  cmp_proveedores.push(p);
+  cmp_saveProveedores(cmp_proveedores);
+  closeMod();
+  /* Reabrir la modal de SC */
+  const scId = document.querySelector('.sc-item-chk')?.closest('[data-sc-id]')?.dataset.scId;
+  if(scId){
+    cmp_editSC(scId);
+  } else {
+    cmp_renderProv();
+  }
 }
 
 /* ── Proveedores ── */
