@@ -1519,7 +1519,7 @@ const CFG_DEF = {
   currency:'CLP', parity:1, decimalsQty:3, decimalsQtyBudget:2, decimalsPrice:0, decimalsBudget:0,
   companyName:'', companyTagline:'', notes:[],
   companyRut:'', companyRutDV:'', companyAddress:'', companyPhone:'', companyPhonePrefix:'+56', companyEmail:'', companyWeb:'',
-  solicitarFechaEntregaCot: false,
+  solicitarFechaEntregaCot: false, mostrarContactoSC: false, mostrarProfesionalObra: false,
   decimalSeparator:',',
   repLegal:'', repLegalRut:'', profName:'', profRut:'', profPhone:'', profEmail:'',
   profesionalPhone:'', profesionalPhonePrefix:'+56', profesionalEmail:'',
@@ -3832,6 +3832,12 @@ function openSettings(activeTab){
         '<div style="background:var(--bg2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">'+
           '<label class="chk-opt" style="margin-bottom:0"><input type="checkbox" '+(CFG.solicitarFechaEntregaCot?'checked':'')+' onchange="CFG.solicitarFechaEntregaCot=this.checked;saveCFG()"> Solicitar fecha de entrega cotización</label>'+
         '</div>'+
+        '<div style="background:var(--bg2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">'+
+          '<label class="chk-opt" style="margin-bottom:0"><input type="checkbox" '+(CFG.mostrarContactoSC?'checked':'')+' onchange="CFG.mostrarContactoSC=this.checked;saveCFG()"> Mostrar Nombre Contacto en SC y OC</label>'+
+        '</div>'+
+        '<div style="background:var(--bg2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">'+
+          '<label class="chk-opt" style="margin-bottom:0"><input type="checkbox" '+(CFG.mostrarProfesionalObra?'checked':'')+' onchange="CFG.mostrarProfesionalObra=this.checked;saveCFG()"> Mostrar Profesional en Obra en SC y OC</label>'+
+        '</div>'+
       '</div>'+
     '</div>';
 
@@ -4924,7 +4930,17 @@ function cmp_editSC(id){
         ${CFG.solicitarFechaEntregaCot ? `
         <div style="flex:1;min-width:130px">
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">FECHA ENTREGA COTIZACIÓN</div>
-          <input type="date" id="sc-edit-fecha-entrega" value="${sc.fechaEntregaCot||''}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+          <input type="date" id="sc-edit-fecha-entrega" value="${sc.fechaEntregaCot||""}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>` : ''}
+        ${CFG.mostrarContactoSC ? `
+        <div style="flex:1;min-width:130px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">CONTACTO</div>
+          <input type="text" id="sc-edit-contacto" value="${sc.contactoSC||""}" placeholder="Nombre del contacto" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>` : ''}
+        ${CFG.mostrarProfesionalObra ? `
+        <div style="flex:1;min-width:130px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">PROFESIONAL EN OBRA</div>
+          <input type="text" id="sc-edit-profesional" value="${sc.profesionalObra||""}" placeholder="Nombre del profesional" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
         </div>` : ''}
         <div style="flex:1;min-width:130px">
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">ESTADO</div>
@@ -4959,6 +4975,12 @@ function cmp_saveSC(id){
   sc.fecha   = document.getElementById('sc-edit-fecha').value;
   if(CFG.solicitarFechaEntregaCot) {
     sc.fechaEntregaCot = document.getElementById('sc-edit-fecha-entrega').value;
+  }
+  if(CFG.mostrarContactoSC) {
+    sc.contactoSC = document.getElementById('sc-edit-contacto').value.trim();
+  }
+  if(CFG.mostrarProfesionalObra) {
+    sc.profesionalObra = document.getElementById('sc-edit-profesional').value.trim();
   }
   sc.estado  = document.getElementById('sc-edit-estado').value;
   sc.notas   = document.getElementById('sc-edit-notas').value.trim();
@@ -5009,7 +5031,7 @@ function cmp_shareSC_email(id){
   const lm = comprasData.listaMateriales;
   const itemLines = sc.items.map(si=>{
     const m = lm.find(x=>x.id===si.lmId);
-    return m ? `- ${m.desc}: ${m.qty} ${m.unit}` : '';
+    return m ? `- ${m.desc}: ${Math.round(m.qty)} ${m.unit}` : '';
   }).filter(Boolean).join('\n');
   const prvNames = sc.proveedores.map(pid=>{ const p=cmp_proveedores.find(x=>x.id===pid); return p?p.nombre:'?'; }).join(', ') || '—';
   const asunto = encodeURIComponent(`Solicitud de Cotización ${sc.numero} — ${obra}`);
@@ -5028,7 +5050,7 @@ function cmp_shareSC_wa(id){
   const lm = comprasData.listaMateriales;
   const itemLines = sc.items.map(si=>{
     const m = lm.find(x=>x.id===si.lmId);
-    return m ? `• ${m.desc}: ${m.qty} ${m.unit}` : '';
+    return m ? `• ${m.desc}: ${Math.round(m.qty)} ${m.unit}` : '';
   }).filter(Boolean).join('\n');
   const prvs = sc.proveedores.map(pid=>{ const p=cmp_proveedores.find(x=>x.id===pid); return p?`${p.nombre}${p.telefono?' ('+p.telefono+')':''}`:null; }).filter(Boolean);
   const msg = `*SC ${sc.numero} — ${obra}*\n${empresa ? '_'+empresa+'_\n' : ''}` +
@@ -5189,9 +5211,23 @@ function cmp_editOC(id){
         </div>
         <div style="flex:1;min-width:140px">
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">FECHA ENTREGA EN OBRA</div>
-          <input type="date" id="oc-edit-fecha-obra" value="${oc.fechaEntregaObra||''}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+          <input type="date" id="oc-edit-fecha-obra" value="${oc.fechaEntregaObra||""}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
         </div>
       </div>
+      ${CFG.mostrarContactoSC ? `
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">CONTACTO</div>
+          <input type="text" id="oc-edit-contacto" value="${oc.contactoOC||""}" placeholder="Nombre del contacto" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>
+      </div>` : ''}
+      ${CFG.mostrarProfesionalObra ? `
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">PROFESIONAL EN OBRA</div>
+          <input type="text" id="oc-edit-profesional" value="${oc.profesionalOC||""}" placeholder="Nombre del profesional" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>
+      </div>` : ''}
       <div>
         <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:6px;font-family:var(--ff)">ÍTEMS DE LA OC</div>
         <div style="overflow-x:auto;max-height:240px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:6px">
@@ -5278,6 +5314,12 @@ function cmp_saveOC(id){
   oc.condPago     = document.getElementById('oc-edit-pago').value.trim();
   oc.plazoEntrega = document.getElementById('oc-edit-plazo').value.trim();
   oc.fechaEntregaObra = document.getElementById('oc-edit-fecha-obra').value;
+  if(CFG.mostrarContactoSC) {
+    oc.contactoOC = document.getElementById('oc-edit-contacto').value.trim();
+  }
+  if(CFG.mostrarProfesionalObra) {
+    oc.profesionalOC = document.getElementById('oc-edit-profesional').value.trim();
+  }
   oc.notas        = document.getElementById('oc-edit-notas').value.trim();
   /* Capturar ítems: filas de lista de materiales Y filas libres */
   const lm = comprasData.listaMateriales;
@@ -5471,6 +5513,8 @@ function cmp_printOC(id){
       <div><div class="lbl">Condición de Pago</div><div class="val">${esc(oc.condPago)||'—'}</div></div>
       <div><div class="lbl">Plazo de Entrega</div><div class="val">${esc(oc.plazoEntrega)||'—'}</div></div>
       <div><div class="lbl">Fecha Entrega en Obra</div><div class="val">${esc(oc.fechaEntregaObra)||'—'}</div></div>
+      ${oc.contactoOC?`<div><div class="lbl">Contacto</div><div class="val">${esc(oc.contactoOC)}</div></div>`:''}
+      ${oc.profesionalOC?`<div><div class="lbl">Profesional en Obra</div><div class="val">${esc(oc.profesionalOC)}</div></div>`:''}
       <div><div class="lbl">Estado</div><div class="val">${oc.estado}</div></div>
       <div><div class="lbl">Email Proveedor</div><div class="val">${esc(provEmail)}</div></div>
     </div>
