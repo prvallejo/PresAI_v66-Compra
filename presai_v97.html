@@ -866,15 +866,25 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
         </button>
         <div class="mod-dropdown" id="modDropdown">
           <div class="mod-dd-header">Módulos disponibles</div>
+          <div class="mod-dd-item" onclick="switchToModule('presupuesto')">
+            <span class="mod-icon">📋</span>
+            <span class="mod-name">Presupuesto</span>
+            <span class="mod-status active-s"><span class="mod-dot active"></span>Activo</span>
+          </div>
           <div class="mod-dd-item" onclick="switchToModule('compras')">
             <span class="mod-icon">🛒</span>
             <span class="mod-name">Compras</span>
-            <span class="mod-status active-s"><span class="mod-dot active"></span>Activo</span>
+            <span class="mod-status"></span>
           </div>
-          <div class="mod-dd-item disabled" title="Próximamente">
+      <div class="mod-dd-item disabled" title="Próximamente">
             <span class="mod-icon">💰</span>
             <span class="mod-name">Gastos</span>
-            <span class="mod-status inactive-s"><span class="mod-dot inactive"></span><span class="mod-tag">Próximo</span></span>
+            <span class="mod-status"><span class="mod-dot"></span>Próximamente</span>
+          </div>
+          <div class="mod-dd-divider" style="height:1px;background:var(--border);margin:6px 0"></div>
+          <div class="mod-dd-item" onclick="switchToModule('presupuesto')" style="color:var(--txt2);font-size:11px">
+            <span style="font-size:12px">←</span>
+            <span>Volver a Presupuesto</span>
           </div>
           <div class="mod-dd-item disabled" title="Próximamente">
             <span class="mod-icon">📅</span>
@@ -4510,7 +4520,32 @@ function switchToModule(mod){
   closeAllDropdowns();
   if(mod==='compras'){
     /* Módulo Compras - accesible solo mediante sw('compras') programáticamente */
-    sw('compras');
+    const tabsList = document.querySelector('.tabs-list');
+    const comprasTab = document.querySelector('.tab');
+    if(comprasTab) {
+      sw('compras', comprasTab);
+    } else {
+      /* Fallback si no hay tab */
+      document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+      document.getElementById('p-compras').classList.add('on');
+      if(tabsList) tabsList.style.display = 'none';
+      cmp_sw('lista');
+    }
+  } else if(mod==='presupuesto'){
+    /* Volver al módulo de Presupuesto */
+    const budgetTab = document.querySelector('.tab.on') || document.querySelector('.tab');
+    if(budgetTab) {
+      sw('bud', budgetTab);
+    } else {
+      document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+      document.getElementById('p-bud').classList.add('on');
+      const firstTab = document.querySelector('.tab');
+      if(firstTab) firstTab.classList.add('on');
+      const tabsList = document.querySelector('.tabs-list');
+      if(tabsList) tabsList.style.display = 'flex';
+    }
   }
 }
 /* Cerrar dropdowns al hacer clic fuera */
@@ -5661,6 +5696,17 @@ function sw(id,el){
   document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   document.getElementById('p-'+id).classList.add('on');el.classList.add('on');
+  
+  /* Ocultar/mostrar pestañas del presupuesto según el módulo activo */
+  const tabsList = document.querySelector('.tabs-list');
+  if(tabsList) {
+    if(id === 'compras') {
+      tabsList.style.display = 'none';
+    } else {
+      tabsList.style.display = 'flex';
+    }
+  }
+  
   /* gg-quick-add ahora vive dentro del toolbar GG sticky, se muestra con el panel */
   if(id==='notes')refreshNotesTab();
   if(id==='compras'){cmp_sw('lista');}
