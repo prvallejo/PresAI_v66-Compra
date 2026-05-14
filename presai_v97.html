@@ -1519,6 +1519,7 @@ const CFG_DEF = {
   currency:'CLP', parity:1, decimalsQty:3, decimalsQtyBudget:2, decimalsPrice:0, decimalsBudget:0,
   companyName:'', companyTagline:'', notes:[],
   companyRut:'', companyRutDV:'', companyAddress:'', companyPhone:'', companyPhonePrefix:'+56', companyEmail:'', companyWeb:'',
+  solicitarFechaEntregaCot: false,
   decimalSeparator:',',
   repLegal:'', repLegalRut:'', profName:'', profRut:'', profPhone:'', profEmail:'',
   profesionalPhone:'', profesionalPhonePrefix:'+56', profesionalEmail:'',
@@ -2976,7 +2977,7 @@ function genPrintHtml(includeQrAndSignatures){
     let r = CFG.companyRut.toString().replace(/\D/g, '');
     let s = '';
     while (r.length > 3) { s = '.' + r.slice(-3) + s; r = r.slice(0, -3); }
-    rutFmt = 'Rut: ' + r + s + (CFG.companyRutDV ? '-' + CFG.companyRutDV : '');
+    rutFmt = 'Rut: ' + r.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + s + (CFG.companyRutDV ? '-' + CFG.companyRutDV : '');
   }
   var companyBlock='<div style="display:flex;flex-direction:column;gap:2px;justify-content:flex-end;padding-bottom:2px">'
     +'<div style="font-size:14px;font-weight:700;color:'+color+'">'+esc(CFG.companyName)+'</div>'
@@ -3824,6 +3825,16 @@ function openSettings(activeTab){
     '</div>';
 
   /* CHANGE 4: Reorganized and grouped Ajustes panel */
+  let pnlCompras=
+    '<div class="cfg-section">'+
+      '<h4>🛒 Módulo de Compras</h4>'+
+      '<div style="display:flex;flex-direction:column;gap:12px;">'+
+        '<div style="background:var(--bg2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;gap:10px">'+
+          '<label class="chk-opt" style="margin-bottom:0"><input type="checkbox" '+(CFG.solicitarFechaEntregaCot?'checked':'')+' onchange="CFG.solicitarFechaEntregaCot=this.checked;saveCFG()"> Solicitar fecha de entrega cotización</label>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+
   let pnlAjustes=
     /* Group: Guardado */
     '<div class="cfg-section">'+
@@ -3926,6 +3937,7 @@ function openSettings(activeTab){
       '<button class="cfg-tab'+(activeTab==='moneda'?' cfg-tab-on':'')+'" onclick="cfgSwitchTab(\'moneda\',this)">💱 Moneda</button>'+
       '<button class="cfg-tab'+(activeTab==='precios'?' cfg-tab-on':'')+'" onclick="cfgSwitchTab(\'precios\',this)">⚖️ Precios</button>'+
       '<button class="cfg-tab'+(activeTab==='ajustes'?' cfg-tab-on':'')+'" onclick="cfgSwitchTab(\'ajustes\',this)">🔧 Ajustes</button>'+
+      '<button class="cfg-tab'+(activeTab==='compras'?' cfg-tab-on':'')+'" onclick="cfgSwitchTab(\'compras\',this)">🛒 Compras</button>'+
     '</div>'+
     '<div id="cfg-pnl-proyecto" class="cfg-tab-pnl'+(activeTab==='proyecto'?' cfg-tab-pnl-on':'')+'">'+ pnlProyecto +'</div>'+
     '<div id="cfg-pnl-empresa"  class="cfg-tab-pnl'+(activeTab==='empresa' ?' cfg-tab-pnl-on':'')+'">'+ pnlEmpresa  +'</div>'+
@@ -3933,6 +3945,7 @@ function openSettings(activeTab){
     '<div id="cfg-pnl-moneda"   class="cfg-tab-pnl'+(activeTab==='moneda'  ?' cfg-tab-pnl-on':'')+'">'+ pnlMoneda   +'</div>'+
     '<div id="cfg-pnl-precios"  class="cfg-tab-pnl'+(activeTab==='precios' ?' cfg-tab-pnl-on':'')+'">'+ pnlPrecios  +'</div>'+
     '<div id="cfg-pnl-ajustes"  class="cfg-tab-pnl'+(activeTab==='ajustes' ?' cfg-tab-pnl-on':'')+'">'+ pnlAjustes  +'</div>'+
+    '<div id="cfg-pnl-compras"  class="cfg-tab-pnl'+(activeTab==='compras' ?' cfg-tab-pnl-on':'')+'">'+ pnlCompras  +'</div>'+
     '</div>'+
     '<div class="mf"><button class="btn-p green" onclick="saveSettingsMod()">💾 Guardar y salir</button></div>'+
   '</div>';
@@ -4908,6 +4921,11 @@ function cmp_editSC(id){
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">FECHA</div>
           <input type="date" id="sc-edit-fecha" value="${sc.fecha}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
         </div>
+        ${CFG.solicitarFechaEntregaCot ? `
+        <div style="flex:1;min-width:130px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">FECHA ENTREGA COTIZACIÓN</div>
+          <input type="date" id="sc-edit-fecha-entrega" value="${sc.fechaEntregaCot||''}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>` : ''}
         <div style="flex:1;min-width:130px">
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">ESTADO</div>
           <select id="sc-edit-estado" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">${estadosHtml}</select>
@@ -4939,6 +4957,9 @@ function cmp_saveSC(id){
   if(!sc) return;
   sc.numero  = document.getElementById('sc-edit-num').value.trim() || sc.numero;
   sc.fecha   = document.getElementById('sc-edit-fecha').value;
+  if(CFG.solicitarFechaEntregaCot) {
+    sc.fechaEntregaCot = document.getElementById('sc-edit-fecha-entrega').value;
+  }
   sc.estado  = document.getElementById('sc-edit-estado').value;
   sc.notas   = document.getElementById('sc-edit-notas').value.trim();
   sc.items   = Array.from(document.querySelectorAll('.sc-item-chk:checked')).map(cb=>({lmId:cb.value}));
@@ -5045,6 +5066,7 @@ function cmp_crearOCdesdeSC(scId){
     totalOC: ocItems.reduce((a,i)=>a+i.total,0),
     condPago:'',
     plazoEntrega:'',
+    fechaEntregaObra:'',
     notas:`Generada desde ${sc.numero}`
   };
   comprasData.ordenesCompra.push(oc);
@@ -5066,6 +5088,7 @@ function cmp_newOC(){
     totalOC:0,
     condPago:'',
     plazoEntrega:'',
+    fechaEntregaObra:'',
     notas:''
   };
   comprasData.ordenesCompra.push(oc);
@@ -5164,6 +5187,10 @@ function cmp_editOC(id){
           <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">PLAZO DE ENTREGA</div>
           <input id="oc-edit-plazo" value="${esc(oc.plazoEntrega)}" placeholder="Ej: 2025-06-01" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
         </div>
+        <div style="flex:1;min-width:140px">
+          <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">FECHA ENTREGA EN OBRA</div>
+          <input type="date" id="oc-edit-fecha-obra" value="${oc.fechaEntregaObra||''}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box">
+        </div>
       </div>
       <div>
         <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:6px;font-family:var(--ff)">ÍTEMS DE LA OC</div>
@@ -5250,6 +5277,7 @@ function cmp_saveOC(id){
   oc.estado       = document.getElementById('oc-edit-estado').value;
   oc.condPago     = document.getElementById('oc-edit-pago').value.trim();
   oc.plazoEntrega = document.getElementById('oc-edit-plazo').value.trim();
+  oc.fechaEntregaObra = document.getElementById('oc-edit-fecha-obra').value;
   oc.notas        = document.getElementById('oc-edit-notas').value.trim();
   /* Capturar ítems: filas de lista de materiales Y filas libres */
   const lm = comprasData.listaMateriales;
@@ -5336,13 +5364,13 @@ function cmp_printSC(id){
         <div>
           <div class="doc-header-company-name">${esc(CFG.companyName||'PresAI')}</div>
           ${CFG.companyTagline?`<div class="doc-header-company-sub">${esc(CFG.companyTagline)}</div>`:''}
-          ${CFG.companyRut?`<div class="doc-header-company-sub">RUT ${esc(CFG.companyRut)}</div>`:''}
+          ${CFG.companyRut?`<div class="doc-header-company-sub">Rut: ${esc(CFG.companyRut.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, "."))}${CFG.companyRutDV?'-'+esc(CFG.companyRutDV):''}</div>`:''}
         </div>
       </div>
       <div class="doc-header-right">
         <div class="doc-header-doctype">Solicitud de Cotización</div>
         <div class="doc-header-docnum">${esc(sc.numero)}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">${sc.fecha} · ${estadoLabel[sc.estado]||sc.estado}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.7);margin-top:2px">${sc.fecha} · ${estadoLabel[sc.estado]||sc.estado}${sc.fechaEntregaCot?' · Entrega: '+sc.fechaEntregaCot:''}</div>
       </div>
     </div>
     <div class="grid2">
@@ -5363,7 +5391,7 @@ function cmp_printSC(id){
       <tbody>${itemRows||'<tr><td colspan="6" style="padding:12px;color:#aaa">Sin ítems</td></tr>'}</tbody>
     </table>
     ${sc.notas?`<div style="margin-bottom:16px;font-size:11px;color:#555;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:10px"><b>Instrucciones / Notas:</b> ${esc(sc.notas)}</div>`:''}
-    <div style="font-size:10px;color:#888;margin-bottom:20px">Por favor complete los campos de precio unitario y total, y devuelva este documento a ${esc(CFG.companyEmail||CFG.companyName||'nosotros')} antes de la fecha solicitada.</div>
+    <div style="font-size:10px;color:#888;margin-bottom:20px">Por favor complete los campos de precio unitario y total, y devuelva este documento a ${esc(CFG.companyEmail||CFG.companyName||'nosotros')}${CFG.solicitarFechaEntregaCot?' antes de la fecha solicitada':''}.</div>
     <div class="firma-box">
       <div><div class="firma-line">Firma Proveedor / Fecha</div></div>
       <div><div class="firma-line">Firma Solicitante / Fecha</div></div>
@@ -5427,7 +5455,7 @@ function cmp_printOC(id){
         <div class="doc-header-company">
           <div class="doc-header-company-name">${esc(CFG.companyName||'PresAI')}</div>
           ${CFG.companyTagline?`<div class="doc-header-company-sub">${esc(CFG.companyTagline)}</div>`:''}
-          ${CFG.companyRut?`<div class="doc-header-company-sub">RUT ${esc(CFG.companyRut)}</div>`:''}
+          ${CFG.companyRut?`<div class="doc-header-company-sub">Rut: ${esc(CFG.companyRut.toString().replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, "."))}${CFG.companyRutDV?'-'+esc(CFG.companyRutDV):''}</div>`:''}
         </div>
       </div>
       <div class="doc-header-right">
@@ -5442,6 +5470,7 @@ function cmp_printOC(id){
       <div><div class="lbl">RUT Proveedor</div><div class="val">${esc(provRut)}</div></div>
       <div><div class="lbl">Condición de Pago</div><div class="val">${esc(oc.condPago)||'—'}</div></div>
       <div><div class="lbl">Plazo de Entrega</div><div class="val">${esc(oc.plazoEntrega)||'—'}</div></div>
+      <div><div class="lbl">Fecha Entrega en Obra</div><div class="val">${esc(oc.fechaEntregaObra)||'—'}</div></div>
       <div><div class="lbl">Estado</div><div class="val">${oc.estado}</div></div>
       <div><div class="lbl">Email Proveedor</div><div class="val">${esc(provEmail)}</div></div>
     </div>
