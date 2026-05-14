@@ -1022,7 +1022,7 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">
           <h2 style="font-size:calc(15px * var(--font-scale));font-weight:700;color:var(--navy);margin:0;font-family:var(--ff)">Módulo de Compras</h2>
           <div style="flex:1"></div>
-          <button class="bs" onclick="cmp_buildLista();cmp_renderLista()" style="background:var(--navy);color:#fff;border-color:var(--navy);font-weight:600">↻ Actualizar lista</button>
+          <button class="bs" onclick="cmp_buildLista()" style="background:var(--navy);color:#fff;border-color:var(--navy);font-weight:600">↻ Actualizar lista</button>
           <button class="bs addp" onclick="cmp_newSC()" style="background:#166534;color:#fff;border-color:#166534;font-weight:600">+ Nueva SC</button>
           <button class="bs addp" onclick="cmp_newOC()" style="background:var(--amber);color:#fff;border-color:var(--amber);font-weight:600">+ Nueva OC</button>
         </div>
@@ -1042,11 +1042,10 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center">
             <select id="cmp-filtro-origen" onchange="cmp_renderLista()"
               style="font-family:var(--ff);font-size:calc(12px * var(--font-scale));padding:5px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--txt)">
-              <option value="">Todos los insumos</option>
-              <option value="material">Materiales</option>
-              <option value="equipo">Equipos o herramientas</option>
-              <option value="subcontrato">Subcontratos</option>
-              <option value="gg">Gastos Generales</option>
+              <option value="">Todos los orígenes</option>
+              <option value="apu">Material</option>
+              <option value="partida">Equipos y herramientas</option>
+              <option value="gg">Subcontrato</option>
             </select>
             <!-- Filtro Espacios -->
             <div class="esp-filter-wrap" id="espFilterWrap">
@@ -4528,7 +4527,7 @@ function switchToModule(mod){
       document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
       document.getElementById('p-compras').classList.add('on');
       if(tabsList) tabsList.style.display = 'none';
-      cmp_showProjectSelector();
+      cmp_sw('lista');
     }
   } else if(mod==='presupuesto'){
     /* Volver al módulo de Presupuesto */
@@ -4668,20 +4667,14 @@ function cmp_getFilteredLista(){
   const filtroOrigen = (document.getElementById('cmp-filtro-origen')||{}).value||'';
   const filtroTxt    = ((document.getElementById('cmp-filtro-txt')||{}).value||'').toLowerCase();
   return lista.filter(lm=>{
-    /* Filtro por tipo de insumo (Material, Equipo, Subcontrato, GG) */
-    if(filtroOrigen){
-      if(filtroOrigen === 'material' && lm.origen !== 'apu') return false;
-      if(filtroOrigen === 'equipo' && lm.origen !== 'partida') return false;
-      if(filtroOrigen === 'subcontrato' && !lm.origenNombre.includes('[Sub]')) return false;
-      if(filtroOrigen === 'gg' && lm.origen !== 'gg') return false;
-    }
-    
+    if(filtroOrigen && lm.origen !== filtroOrigen) return false;
     if(filtroTxt && !lm.desc.toLowerCase().includes(filtroTxt) && !lm.origenNombre.toLowerCase().includes(filtroTxt)) return false;
-    
     /* Filtro espacios: si hay seleccionados, verificar coincidencia exacta del nombre del espacio */
     if(espSeleccionados.length > 0){
       const match = espSeleccionados.some(esp => {
         const espLower = esp.toLowerCase();
+        // El origenNombre suele ser el nombre de la partida o del subgrupo de GG.
+        // Buscamos si el nombre del espacio aparece como una palabra completa o coincide exactamente.
         const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
         return regex.test(lm.origenNombre) || regex.test(lm.desc);
       });
@@ -4708,37 +4701,10 @@ function cmp_sw(id){
   document.querySelectorAll('.cpnl').forEach(p=>p.classList.remove('cpnl-on'));
   document.getElementById('ctab-'+id).classList.add('ctab-on');
   document.getElementById('cpnl-'+id).classList.add('cpnl-on');
-  if(id==='lista'){ 
-    if(!currentProjectId) { cmp_showProjectSelector(); return; }
-    cmp_renderLista(); 
-  }
+  if(id==='lista'){ cmp_renderLista(); /* Actualizar dropdown espacios con cubSpaces vigentes */ }
   if(id==='sc')    cmp_renderSC();
   if(id==='oc')    cmp_renderOC();
   if(id==='prov')  cmp_renderProv();
-}
-
-function cmp_showProjectSelector() {
-  const idx = getIdx();
-  let html = `<div style="text-align:center;padding:40px 20px;background:var(--bg);border-radius:12px;border:1px solid var(--border);max-width:500px;margin:20px auto">
-    <div style="font-size:32px;margin-bottom:15px">📂</div>
-    <h3 style="margin-bottom:10px;color:var(--navy)">Selecciona un Presupuesto</h3>
-    <p style="color:var(--txt2);font-size:13px;margin-bottom:20px">Elige el presupuesto con el que trabajarás en el módulo de compras.</p>
-    <div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;padding:5px">`;
-  
-  if(!idx.length) {
-    html += `<div style="padding:15px;color:var(--txt3);font-style:italic">No hay presupuestos guardados.</div>`;
-  } else {
-    idx.forEach(p => {
-      html += `<button class="bs" onclick="loadP('${p.id}');switchToModule('compras')" style="width:100%;text-align:left;padding:12px;display:flex;flex-direction:column;gap:4px">
-        <span style="font-weight:700;color:var(--navy)">${esc(p.obra)}</span>
-        <span style="font-size:10px;color:var(--txt3)">ID: ${p.id}</span>
-      </button>`;
-    });
-  }
-  
-  html += `</div></div>`;
-  document.getElementById('cpnl-lista').innerHTML = html;
-  document.getElementById('cpnl-lista').classList.add('cpnl-on');
 }
 
 /* ── Construir lista de materiales desde APU + partidas + GG ── */
@@ -4845,11 +4811,7 @@ function cmp_renderLista(){
 
 function cmp_rowHtml(lm){
   const badgeClass = lm.origen;
-  let badgeLabel = 'Material';
-  if(lm.origen === 'partida') badgeLabel = 'Equipo/Herr.';
-  if(lm.origenNombre.includes('[Sub]')) badgeLabel = 'Subcontrato';
-  if(lm.origen === 'gg') badgeLabel = 'Gasto General';
-  
+  const badgeLabel = lm.origen==='apu'?'Material':lm.origen==='partida'?'Equipos y herramientas':'Subcontrato';
   const scLabel = lm.enSC&&lm.enSC.length ? `<span style="color:var(--navy);font-weight:600">${lm.enSC.length} SC</span>` : `<button class="bs" onclick="cmp_addToSC('${lm.id}')" style="font-size:10px;padding:2px 7px">+ SC</button>`;
   
   /* Mostrar proveedores asignados con badges */
@@ -4881,22 +4843,15 @@ function cmp_rowHtml(lm){
 
 /* ── Nueva Solicitud de Cotización ── */
 function cmp_newSC(){
-  if(!cmp_proveedores.length) {
-    alert('⚠️ No tienes proveedores creados. Por favor, crea al menos un proveedor antes de generar una solicitud de cotización.');
-    cmp_sw('prov');
-    cmp_newProv();
-    return;
-  }
   const num = 'SC-' + String(comprasData.solicitudes.length+1).padStart(3,'0');
   const sc = {
     id:'sc_'+Math.random().toString(36).substr(2,8),
-    numero:num,
-    fecha:new Date().toISOString().split('T')[0],
+    numero: num,
+    fecha: new Date().toISOString().slice(0,10),
     estado:'borrador',
     items:[],
     proveedores:[],
-    notas:'',
-    historial: [{fecha: new Date().toISOString(), estado: 'borrador', nota: 'Creación de solicitud'}]
+    notas:''
   };
   comprasData.solicitudes.push(sc);
   markUnsaved();
@@ -5036,21 +4991,6 @@ function cmp_editSC(id){
         <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">NOTAS / INSTRUCCIONES</div>
         <textarea id="sc-edit-notas" rows="3" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box;resize:vertical">${esc(sc.notas)}</textarea>
       </div>
-      ${sc.historial ? `
-      <div>
-        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:6px;font-family:var(--ff)">HISTORIAL DE ESTADOS</div>
-        <div style="max-height:150px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:6px;padding:8px 10px;background:var(--bg2)">
-          ${sc.historial.map(h => `
-            <div style="font-size:11px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border)">
-              <div style="display:flex;justify-content:space-between">
-                <span style="font-weight:700;color:var(--navy)">${h.estado.toUpperCase()}</span>
-                <span style="color:var(--txt3)">${new Date(h.fecha).toLocaleString('es-CL')}</span>
-              </div>
-              <div style="color:var(--txt2);font-style:italic">${esc(h.nota)}</div>
-            </div>
-          `).reverse().join('')}
-        </div>
-      </div>` : ''}
       <div style="display:flex;justify-content:flex-end;gap:10px">
         <button class="btn-p" onclick="closeMod()" style="background:var(--bg2);color:var(--txt);border:1.5px solid var(--border2)">Cancelar</button>
         <button class="btn-p blue" onclick="cmp_saveSC('${id}');closeMod()">Guardar SC</button>
@@ -5063,11 +5003,6 @@ function cmp_editSC(id){
 function cmp_saveSC(id){
   const sc = comprasData.solicitudes.find(s=>s.id===id);
   if(!sc) return;
-  const nuevoEstado = document.getElementById('sc-edit-estado').value;
-  if(sc.estado !== nuevoEstado) {
-    if(!sc.historial) sc.historial = [];
-    sc.historial.push({fecha: new Date().toISOString(), estado: nuevoEstado, nota: 'Cambio de estado manual'});
-  }
   sc.numero  = document.getElementById('sc-edit-num').value.trim() || sc.numero;
   sc.fecha   = document.getElementById('sc-edit-fecha').value;
   if(CFG.solicitarFechaEntregaCot) {
@@ -5079,7 +5014,7 @@ function cmp_saveSC(id){
   if(CFG.mostrarProfesionalObra) {
     sc.profesionalObra = document.getElementById('sc-edit-profesional').value.trim();
   }
-  sc.estado  = nuevoEstado;
+  sc.estado  = document.getElementById('sc-edit-estado').value;
   sc.notas   = document.getElementById('sc-edit-notas').value.trim();
   sc.items   = Array.from(document.querySelectorAll('.sc-item-chk:checked')).map(cb=>({lmId:cb.value}));
   sc.proveedores = Array.from(document.querySelectorAll('.sc-prov-chk:checked')).map(cb=>cb.value);
