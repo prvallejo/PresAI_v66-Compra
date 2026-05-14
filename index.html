@@ -4772,14 +4772,22 @@ function cmp_rowHtml(lm){
 /* ── Nueva Solicitud de Cotización ── */
 function cmp_newSC(){
   const num = 'SC-' + String(comprasData.solicitudes.length+1).padStart(3,'0');
+  const ahora = new Date().toISOString();
   const sc = {
     id:'sc_'+Math.random().toString(36).substr(2,8),
     numero: num,
-    fecha: new Date().toISOString().slice(0,10),
+    fecha: ahora.slice(0,10),
     estado:'borrador',
     items:[],
     proveedores:[],
-    notas:''
+    notas:'',
+    historial: [
+      {
+        estado: 'borrador',
+        timestamp: ahora,
+        descripcion: 'Solicitud de cotización creada'
+      }
+    ]
   };
   comprasData.solicitudes.push(sc);
   markUnsaved();
@@ -4885,24 +4893,59 @@ function cmp_editSC(id){
         <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">NOTAS / INSTRUCCIONES</div>
         <textarea id="sc-edit-notas" rows="3" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt);box-sizing:border-box;resize:vertical">${esc(sc.notas)}</textarea>
       </div>
+      <div id="sc-historial-section" style="display:none">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:6px;font-family:var(--ff)">HISTORIAL DE ETAPAS</div>
+        <div style="border:1.5px solid var(--border2);border-radius:6px;padding:10px;background:var(--bg2);max-height:180px;overflow-y:auto" id="sc-historial-content"></div>
+      </div>
       <div style="display:flex;justify-content:flex-end;gap:10px">
         <button class="btn-p" onclick="closeMod()" style="background:var(--bg2);color:var(--txt);border:1.5px solid var(--border2)">Cancelar</button>
         <button class="btn-p blue" onclick="cmp_saveSC('${id}');closeMod()">Guardar SC</button>
       </div>
     </div>
   </div>`;
+  
+  /* Mostrar historial si existe */
+  if(sc.historial && sc.historial.length > 0){
+    document.getElementById('sc-historial-section').style.display = 'block';
+    const historialHtml = sc.historial.map(h => {
+      const fecha = new Date(h.timestamp);
+      const fechaFormato = fecha.toLocaleDateString('es-CL') + ' ' + fecha.toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'});
+      const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada'};
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--ff)">
+        <div style="font-weight:600;color:var(--navy)">${estadoLabels[h.estado] || h.estado}</div>
+        <div style="color:var(--txt2);font-size:10px">${fechaFormato}</div>
+        <div style="color:var(--txt);margin-top:2px">${esc(h.descripcion)}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('sc-historial-content').innerHTML = historialHtml;
+  }
+  
   document.getElementById('ov').style.display='block';
 }
 
 function cmp_saveSC(id){
   const sc = comprasData.solicitudes.find(s=>s.id===id);
   if(!sc) return;
+  const estadoAnterior = sc.estado;
   sc.numero  = document.getElementById('sc-edit-num').value.trim() || sc.numero;
   sc.fecha   = document.getElementById('sc-edit-fecha').value;
   sc.estado  = document.getElementById('sc-edit-estado').value;
   sc.notas   = document.getElementById('sc-edit-notas').value.trim();
   sc.items   = Array.from(document.querySelectorAll('.sc-item-chk:checked')).map(cb=>({lmId:cb.value}));
   sc.proveedores = Array.from(document.querySelectorAll('.sc-prov-chk:checked')).map(cb=>cb.value);
+  
+  /* Registrar cambio de estado en el historial */
+  if(sc.estado !== estadoAnterior){
+    if(!sc.historial) sc.historial = [];
+    const ahora = new Date().toISOString();
+    const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotizacion Aceptada'};
+    sc.historial.push({
+      estado: sc.estado,
+      timestamp: ahora,
+      descripcion: 'Estado cambiado a ' + (estadoLabels[sc.estado] || sc.estado)
+    });
+  }
+  
   markUnsaved(); cmp_renderSC();
 }
 
@@ -4923,6 +4966,12 @@ function cmp_addToSC(lmId){
 function cmp_shareSC_email(id){
   const sc = comprasData.solicitudes.find(s=>s.id===id);
   if(!sc) return;
+  
+  /* Bloquear envío si la cotización ya está aceptada */
+  if(sc.estado === 'cotizacion_aceptada'){
+    alert('No se puede enviar esta cotización.\n\nLa solicitud "' + sc.numero + '" ya ha sido aceptada y no puede reenviarse como solicitud de cotización.');
+    return;
+  }
   const obra = CFG.projObra || 'Proyecto';
   const empresa = CFG.companyName || '';
   const lm = comprasData.listaMateriales;
@@ -4942,6 +4991,12 @@ function cmp_shareSC_email(id){
 function cmp_shareSC_wa(id){
   const sc = comprasData.solicitudes.find(s=>s.id===id);
   if(!sc) return;
+  
+  /* Bloquear envío si la cotización ya está aceptada */
+  if(sc.estado === 'cotizacion_aceptada'){
+    alert('No se puede enviar esta cotización.\n\nLa solicitud "' + sc.numero + '" ya ha sido aceptada y no puede reenviarse como solicitud de cotización.');
+    return;
+  }
   const obra = CFG.projObra || 'Proyecto';
   const empresa = CFG.companyName || '';
   const lm = comprasData.listaMateriales;
