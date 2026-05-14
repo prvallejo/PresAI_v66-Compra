@@ -1046,9 +1046,9 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <select id="cmp-filtro-origen" onchange="cmp_renderLista()"
               style="font-family:var(--ff);font-size:calc(12px * var(--font-scale));padding:5px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--txt)">
               <option value="">Todos los orígenes</option>
-              <option value="apu">APU</option>
-              <option value="partida">Partida directa</option>
-              <option value="gg">Gastos Generales</option>
+              <option value="apu">Material</option>
+              <option value="partida">Equipos y herramientas</option>
+              <option value="gg">Subcontrato</option>
             </select>
             <!-- Filtro Espacios -->
             <div class="esp-filter-wrap" id="espFilterWrap">
@@ -4814,7 +4814,7 @@ function cmp_renderLista(){
 
 function cmp_rowHtml(lm){
   const badgeClass = lm.origen;
-  const badgeLabel = lm.origen==='apu'?'APU':lm.origen==='partida'?'Partida':'GG';
+  const badgeLabel = lm.origen==='apu'?'Material':lm.origen==='partida'?'Equipos y herramientas':'Subcontrato';
   const scLabel = lm.enSC&&lm.enSC.length ? `<span style="color:var(--navy);font-weight:600">${lm.enSC.length} SC</span>` : `<button class="bs" onclick="cmp_addToSC('${lm.id}')" style="font-size:10px;padding:2px 7px">+ SC</button>`;
   
   /* Mostrar proveedores asignados con badges */
