@@ -4619,16 +4619,33 @@ function cmp_getFilteredLista(){
   return lista.filter(lm=>{
     if(filtroOrigen && lm.origen !== filtroOrigen) return false;
     if(filtroTxt && !lm.desc.toLowerCase().includes(filtroTxt) && !lm.origenNombre.toLowerCase().includes(filtroTxt)) return false;
-    /* Filtro espacios: si hay seleccionados, verificar coincidencia exacta del nombre del espacio */
+    
+    /* Filtro espacios: si hay seleccionados, verificar si el material corresponde a esos espacios */
     if(espSeleccionados.length > 0){
-      const match = espSeleccionados.some(esp => {
-        const espLower = esp.toLowerCase();
-        // El origenNombre suele ser el nombre de la partida o del subgrupo de GG.
-        // Buscamos si el nombre del espacio aparece como una palabra completa o coincide exactamente.
-        const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
-        return regex.test(lm.origenNombre) || regex.test(lm.desc);
-      });
-      if(!match) return false;
+      /* Para materiales de APU, buscar cubicaciones que correspondan a los espacios seleccionados */
+      if(lm.origen && lm.origen.startsWith('apu_')){
+        const apuId = lm.origenId;
+        const cubicaciones = tofData[apuId] || [];
+        
+        /* Verificar si hay cubicaciones para los espacios seleccionados */
+        const tieneEspacios = cubicaciones.some(cub => {
+          return espSeleccionados.some(esp => {
+            const espLower = esp.toLowerCase();
+            const cubEspLower = (cub.esp || '').toLowerCase();
+            return cubEspLower === espLower || cubEspLower.includes(espLower);
+          });
+        });
+        
+        if(!tieneEspacios) return false;
+      } else if(lm.origen === 'gg'){
+        /* Para GG, verificar coincidencia textual en el nombre */
+        const match = espSeleccionados.some(esp => {
+          const espLower = esp.toLowerCase();
+          const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
+          return regex.test(lm.origenNombre) || regex.test(lm.desc);
+        });
+        if(!match) return false;
+      }
     }
     return true;
   });
@@ -4663,6 +4680,10 @@ function cmp_buildLista(){
   /* Fuente 1: Materiales (secs[1]) de APUs */
   items.filter(it=>it.t==='it'&&apuData[it.id]).forEach(it=>{
     const rows = apuData[it.id].secs[1].rows; /* sección Materiales */
+    const cubicaciones = tofData[it.id] || [];
+    /* Obtener espacios únicos de las cubicaciones */
+    const espacios = [...new Set(cubicaciones.map(c => c.esp).filter(e => e && e.trim()))];
+    
     rows.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
@@ -4671,6 +4692,7 @@ function cmp_buildLista(){
         qty: N(r.qty)*N(it.qty),
         precioRef: N(r.price),
         totalRef: N(r.qty)*N(it.qty)*N(r.price),
+        espacios: espacios,
         enSC:[]
       });
     });
@@ -4684,6 +4706,7 @@ function cmp_buildLista(){
         qty: N(r.qty)*N(it.qty),
         precioRef: N(r.price),
         totalRef: N(r.qty)*N(it.qty)*N(r.price),
+        espacios: espacios,
         enSC:[]
       });
     });
@@ -4697,6 +4720,7 @@ function cmp_buildLista(){
         qty: N(r.qty)*N(it.qty),
         precioRef: N(r.price),
         totalRef: N(r.qty)*N(it.qty)*N(r.price),
+        espacios: espacios,
         enSC:[]
       });
     });
