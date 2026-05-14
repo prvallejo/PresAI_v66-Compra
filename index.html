@@ -4644,7 +4644,7 @@ function espApplyAndCreateSC(){
       lmId: lm.id,
       desc: lm.desc,
       unit: lm.unit,
-      qty: lm.qty,
+      qty: Math.ceil(lm.qty),
       precioRef: lm.precioRef,
       proveedor: '',
       notas: ''
@@ -4678,14 +4678,22 @@ function cmp_getFilteredLista(){
     
     if(filtroTxt && !lm.desc.toLowerCase().includes(filtroTxt) && !lm.origenNombre.toLowerCase().includes(filtroTxt)) return false;
     
-    /* Filtro espacios: si hay seleccionados, verificar coincidencia exacta del nombre del espacio */
+    /* Filtro espacios: si hay seleccionados, verificar coincidencia */
     if(espSeleccionados.length > 0){
-      const match = espSeleccionados.some(esp => {
-        const espLower = esp.toLowerCase();
-        const regex = new RegExp('\\b' + espLower.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b', 'i');
-        return regex.test(lm.origenNombre) || regex.test(lm.desc);
-      });
-      if(!match) return false;
+      if(!lm.esp) {
+        /* Si el item no tiene espacio asignado (ej: GG o Partida directa), 
+           podemos intentar buscar en su nombre de origen */
+        const match = espSeleccionados.some(esp => {
+          return lm.origenNombre.toLowerCase().includes(esp.toLowerCase().trim());
+        });
+        if(!match) return false;
+      } else {
+        /* Si tiene espacio asignado, debe coincidir con alguno de los seleccionados */
+        const match = espSeleccionados.some(esp => {
+          return lm.esp.toLowerCase().trim() === esp.toLowerCase().trim();
+        });
+        if(!match) return false;
+      }
     }
     return true;
   });
@@ -4743,32 +4751,55 @@ function cmp_showProjectSelector() {
 
 /* ── Construir lista de materiales desde APU + partidas + GG ── */
 function cmp_buildLista(){
-  const lista = [];
-  /* Fuente 1: Materiales (secs[1]) de APUs */
+  let lista=[];
+  /* Fuente 1: Insumos de APUs (Materiales y Subcontratos) */
   items.filter(it=>it.t==='it'&&apuData[it.id]).forEach(it=>{
-    const rows = apuData[it.id].secs[1].rows; /* sección Materiales */
-    rows.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
-      lista.push({
-        id:'lm_'+Math.random().toString(36).substr(2,8),
-        origen:'apu', origenId:it.id, origenNombre:it.name,
-        desc:r.desc, unit:r.unit||'',
-        qty: N(r.qty)*N(it.qty),
-        precioRef: N(r.price),
-        totalRef: N(r.qty)*N(it.qty)*N(r.price),
-        enSC:[],
-        proveedoresAsignados:[] /* IDs de proveedores asignados a este material */
-      });
+    const mats = apuData[it.id].secs[1].rows;
+    mats.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
+      /* Calcular desglose por espacio si existe cubicación detallada */
+      const cubRows = tofData[it.id] || [];
+      if(cubRows.length > 0) {
+        cubRows.forEach(crow => {
+          const crowQty = N(crow.n) * N(crow.a) * N(crow.l) * N(crow.h);
+          const finalQty = Math.ceil(N(r.qty) * crowQty);
+          lista.push({
+            id:'lm_'+Math.random().toString(36).substr(2,8),
+            origen:'apu', origenId:it.id, 
+            origenNombre:it.name + (crow.esp ? ' (' + crow.esp.trim() + ')' : ''),
+            desc:r.desc, unit:r.unit||'',
+            qty: finalQty,
+            precioRef: N(r.price),
+            totalRef: finalQty * N(r.price),
+            esp: (crow.esp || '').trim(),
+            enSC:[],
+            proveedoresAsignados:[]
+          });
+        });
+      } else {
+        const finalQty = Math.ceil(N(r.qty) * N(it.qty));
+        lista.push({
+          id:'lm_'+Math.random().toString(36).substr(2,8),
+          origen:'apu', origenId:it.id, origenNombre:it.name,
+          desc:r.desc, unit:r.unit||'',
+          qty: finalQty,
+          precioRef: N(r.price),
+          totalRef: finalQty * N(r.price),
+          enSC:[],
+          proveedoresAsignados:[]
+        });
+      }
     });
-    /* Subcontratos del APU (secs[3]) también van a compras */
+    /* Subcontratos del APU (secs[3]) */
     const subs = apuData[it.id].secs[3].rows;
     subs.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
+      const finalQty = Math.ceil(N(r.qty) * N(it.qty));
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
         origen:'apu', origenId:it.id, origenNombre:it.name+' [Sub]',
         desc:r.desc, unit:r.unit||'',
-        qty: N(r.qty)*N(it.qty),
+        qty: finalQty,
         precioRef: N(r.price),
-        totalRef: N(r.qty)*N(it.qty)*N(r.price),
+        totalRef: finalQty * N(r.price),
         enSC:[],
         proveedoresAsignados:[]
       });
@@ -4837,7 +4868,7 @@ function cmp_renderLista(){
   }
   tbody.innerHTML = html;
 
-  const totMat = filtered.reduce((a,lm)=>a+lm.totalRef,0);
+  const totMat = filtered.reduce((a,lm)=>a+(Math.ceil(lm.qty) * lm.precioRef),0);
   document.getElementById('cmp-tot-mat').textContent = fmtCLP(totMat);
   resumen.style.display='flex';
   resumen.style.flexDirection='column';
@@ -4872,9 +4903,9 @@ function cmp_rowHtml(lm){
     </td>
     <td><span class="cmp-badge ${badgeClass}">${badgeLabel}</span></td>
     <td style="text-align:center">${esc(lm.unit)}</td>
-    <td style="text-align:right;font-family:var(--mono)">${fmtQBudget(lm.qty)}</td>
+    <td style="text-align:right;font-family:var(--mono)">${fmtQ(Math.ceil(lm.qty))}</td>
     <td style="text-align:right;font-family:var(--mono)">${lm.precioRef>0?fmtCLP(lm.precioRef):'—'}</td>
-    <td style="text-align:right;font-family:var(--mono);font-weight:600">${lm.totalRef>0?fmtCLP(lm.totalRef):'—'}</td>
+    <td style="text-align:right;font-family:var(--mono);font-weight:600">${lm.totalRef>0?fmtCLP(Math.ceil(lm.qty) * lm.precioRef):'—'}</td>
     <td style="text-align:center">${scLabel}</td>
   </tr>`;
 }
@@ -5750,6 +5781,10 @@ function cmp_renderProv(){
 function cmp_loadFromProject(p){
   comprasData = p.comprasData || { listaMateriales:[], solicitudes:[], ordenesCompra:[] };
   cmp_proveedores = cmp_loadProveedores();
+  /* Si la lista de materiales está vacía, intentar construirla */
+  if(!comprasData.listaMateriales || comprasData.listaMateriales.length === 0) {
+    cmp_buildLista();
+  }
 }
 
 /* ════════════════════════════════════════════════════════════ */
