@@ -1036,8 +1036,9 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <select id="cmp-filtro-origen" onchange="cmp_renderLista()"
               style="font-family:var(--ff);font-size:calc(12px * var(--font-scale));padding:5px 10px;border:1.5px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--txt)">
               <option value="">Todos los orígenes</option>
-              <option value="apu">APU</option>
-              <option value="partida">Partida directa</option>
+              <option value="apu_materiales">APU - Materiales</option>
+              <option value="apu_equipos">APU - Equipos y Herramientas</option>
+              <option value="apu_subcontrato">APU - Subcontrato</option>
               <option value="gg">Gastos Generales</option>
             </select>
             <!-- Filtro Espacios -->
@@ -4665,7 +4666,20 @@ function cmp_buildLista(){
     rows.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
-        origen:'apu', origenId:it.id, origenNombre:it.name,
+        origen:'apu_materiales', origenId:it.id, origenNombre:it.name,
+        desc:r.desc, unit:r.unit||'',
+        qty: N(r.qty)*N(it.qty),
+        precioRef: N(r.price),
+        totalRef: N(r.qty)*N(it.qty)*N(r.price),
+        enSC:[]
+      });
+    });
+    /* Equipos y Herramientas del APU (secs[2]) también van a compras */
+    const equips = apuData[it.id].secs[2].rows;
+    equips.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
+      lista.push({
+        id:'lm_'+Math.random().toString(36).substr(2,8),
+        origen:'apu_equipos', origenId:it.id, origenNombre:it.name+' [Equipo]',
         desc:r.desc, unit:r.unit||'',
         qty: N(r.qty)*N(it.qty),
         precioRef: N(r.price),
@@ -4678,25 +4692,13 @@ function cmp_buildLista(){
     subs.filter(r=>r.desc&&r.desc.trim()!=='').forEach(r=>{
       lista.push({
         id:'lm_'+Math.random().toString(36).substr(2,8),
-        origen:'apu', origenId:it.id, origenNombre:it.name+' [Sub]',
+        origen:'apu_subcontrato', origenId:it.id, origenNombre:it.name+' [Sub]',
         desc:r.desc, unit:r.unit||'',
         qty: N(r.qty)*N(it.qty),
         precioRef: N(r.price),
         totalRef: N(r.qty)*N(it.qty)*N(r.price),
         enSC:[]
       });
-    });
-  });
-  /* Fuente 2: Partidas directas sin APU con precio > 0 */
-  items.filter(it=>it.t==='it'&&!apuData[it.id]&&N(it.price)>0).forEach(it=>{
-    lista.push({
-      id:'lm_'+Math.random().toString(36).substr(2,8),
-      origen:'partida', origenId:it.id, origenNombre:it.num+' '+it.name,
-      desc:it.name, unit:it.unit||'gl',
-      qty: N(it.qty)||1,
-      precioRef: N(it.price),
-      totalRef: (N(it.qty)||1)*N(it.price),
-      enSC:[]
     });
   });
   /* Fuente 3: Gastos Generales */
@@ -4755,8 +4757,8 @@ function cmp_renderLista(){
 }
 
 function cmp_rowHtml(lm){
-  const badgeClass = lm.origen;
-  const badgeLabel = lm.origen==='apu'?'APU':lm.origen==='partida'?'Partida':'GG';
+  const badgeClass = lm.origen.startsWith('apu_') ? 'apu' : lm.origen;
+  const badgeLabel = lm.origen==='apu_materiales'?'Materiales':lm.origen==='apu_equipos'?'Equipos':lm.origen==='apu_subcontrato'?'Subcontrato':lm.origen==='gg'?'GG':'?';
   const scLabel = lm.enSC&&lm.enSC.length ? `<span style="color:var(--navy);font-weight:600">${lm.enSC.length} SC</span>` : `<button class="bs" onclick="cmp_addToSC('${lm.id}')" style="font-size:10px;padding:2px 7px">+ SC</button>`;
   return `<tr class="cmp-row">
     <td style="max-width:260px"><div style="font-weight:600;color:var(--txt)">${esc(lm.desc)}</div><div style="font-size:calc(10px * var(--font-scale));color:var(--txt2)">${esc(lm.origenNombre)}</div></td>
@@ -4972,6 +4974,13 @@ function cmp_shareSC_email(id){
     alert('No se puede enviar esta cotización.\n\nLa solicitud "' + sc.numero + '" ya ha sido aceptada y no puede reenviarse como solicitud de cotización.');
     return;
   }
+  
+  /* Verificar que hay proveedores seleccionados */
+  if(!sc.proveedores || sc.proveedores.length === 0){
+    alert('Selecciona al menos un proveedor para enviar la cotización.');
+    return;
+  }
+  
   const obra = CFG.projObra || 'Proyecto';
   const empresa = CFG.companyName || '';
   const lm = comprasData.listaMateriales;
@@ -4979,12 +4988,18 @@ function cmp_shareSC_email(id){
     const m = lm.find(x=>x.id===si.lmId);
     return m ? `- ${m.desc}: ${m.qty} ${m.unit}` : '';
   }).filter(Boolean).join('\n');
-  const prvNames = sc.proveedores.map(pid=>{ const p=cmp_proveedores.find(x=>x.id===pid); return p?p.nombre:'?'; }).join(', ') || '—';
-  const asunto = encodeURIComponent(`Solicitud de Cotización ${sc.numero} — ${obra}`);
-  const cuerpo = encodeURIComponent(
-    `Estimado(a) proveedor(a):\n\nSomos ${empresa}. Junto a este mensaje adjuntamos (o detallamos a continuación) nuestra ${sc.numero} para el proyecto "${obra}".\n\nÍtems a cotizar:\n${itemLines}\n\nFavor enviar su cotización a la brevedad.\n\nNotas: ${sc.notas||'—'}\n\nProveedores consultados: ${prvNames}\n\nSaludos,\n${empresa}`
-  );
-  window.location.href = `mailto:?subject=${asunto}&body=${cuerpo}`;
+  
+  /* Enviar individualmente a cada proveedor */
+  sc.proveedores.forEach(pid => {
+    const prov = cmp_proveedores.find(x=>x.id===pid);
+    if(!prov || !prov.email) return;
+    
+    const asunto = encodeURIComponent(`Solicitud de Cotización ${sc.numero} — ${obra}`);
+    const cuerpo = encodeURIComponent(
+      `Estimado(a) ${prov.nombre}:\n\nSomos ${empresa}. Junto a este mensaje adjuntamos (o detallamos a continuación) nuestra ${sc.numero} para el proyecto "${obra}".\n\nÍtems a cotizar:\n${itemLines}\n\nFavor enviar su cotización a la brevedad.\n\nNotas: ${sc.notas||'—'}\n\nSaludos,\n${empresa}`
+    );
+    window.open(`mailto:${prov.email}?subject=${asunto}&body=${cuerpo}`, '_blank');
+  });
 }
 
 /* ── Compartir SC por WhatsApp ── */
@@ -4997,6 +5012,13 @@ function cmp_shareSC_wa(id){
     alert('No se puede enviar esta cotización.\n\nLa solicitud "' + sc.numero + '" ya ha sido aceptada y no puede reenviarse como solicitud de cotización.');
     return;
   }
+  
+  /* Verificar que hay proveedores seleccionados */
+  if(!sc.proveedores || sc.proveedores.length === 0){
+    alert('Selecciona al menos un proveedor para enviar la cotización.');
+    return;
+  }
+  
   const obra = CFG.projObra || 'Proyecto';
   const empresa = CFG.companyName || '';
   const lm = comprasData.listaMateriales;
@@ -5004,18 +5026,23 @@ function cmp_shareSC_wa(id){
     const m = lm.find(x=>x.id===si.lmId);
     return m ? `• ${m.desc}: ${m.qty} ${m.unit}` : '';
   }).filter(Boolean).join('\n');
-  const prvs = sc.proveedores.map(pid=>{ const p=cmp_proveedores.find(x=>x.id===pid); return p?`${p.nombre}${p.telefono?' ('+p.telefono+')':''}`:null; }).filter(Boolean);
-  const msg = `*SC ${sc.numero} — ${obra}*\n${empresa ? '_'+empresa+'_\n' : ''}` +
-    `\n*Ítems a cotizar:*\n${itemLines || '(sin ítems)'}` +
-    (sc.notas ? `\n\n*Notas:* ${sc.notas}` : '') +
-    `\n\nFavor cotizar a la brevedad. Gracias.`;
-  const msgEnc = encodeURIComponent(msg);
-  /* Si hay proveedor con teléfono, abrir directo; si no, abrir chat genérico */
-  const primerTel = prvs.length && sc.proveedores[0] ? (()=>{ const p=cmp_proveedores.find(x=>x.id===sc.proveedores[0]); return p&&p.telefono?p.telefono.replace(/[^0-9+]/g,''):''; })() : '';
-  const waUrl = primerTel
-    ? `https://wa.me/${primerTel.replace('+','')}?text=${msgEnc}`
-    : (window._isMobile && _isMobile() ? `whatsapp://send?text=${msgEnc}` : `https://web.whatsapp.com/send?text=${msgEnc}`);
-  window.open(waUrl, '_blank');
+  
+  /* Enviar individualmente a cada proveedor con teléfono */
+  sc.proveedores.forEach(pid => {
+    const prov = cmp_proveedores.find(x=>x.id===pid);
+    if(!prov || !prov.telefono) return;
+    
+    const msg = `*SC ${sc.numero} — ${obra}*\n${empresa ? '_'+empresa+'_\n' : ''}` +
+      `\n*Estimado(a) ${prov.nombre}:*\n` +
+      `\n*Ítems a cotizar:*\n${itemLines || '(sin ítems)'}` +
+      (sc.notas ? `\n\n*Notas:* ${sc.notas}` : '') +
+      `\n\nFavor cotizar a la brevedad. Gracias.`;
+    
+    const msgEnc = encodeURIComponent(msg);
+    const tel = prov.telefono.replace(/[^0-9+]/g,'');
+    const waUrl = `https://wa.me/${tel.replace('+','')}?text=${msgEnc}`;
+    window.open(waUrl, '_blank');
+  });
 }
 
 /* ── Crear OC a partir de SC con cotización aceptada ── */
@@ -5467,9 +5494,8 @@ function cmp_newProv(){
         <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px;font-family:var(--ff)">RUBRO</div>
         <select id="pnv-rubro" style="width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:6px;font-family:var(--ff);font-size:13px;background:var(--bg);color:var(--txt)">
           <option value="materiales">Materiales</option>
+          <option value="equipos">Equipos y Herramientas</option>
           <option value="subcontrato">Subcontrato</option>
-          <option value="equipos">Equipos</option>
-          <option value="general">General</option>
         </select>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px">
@@ -5501,7 +5527,7 @@ function cmp_saveProv(){
 function cmp_editProv(id){
   const p = cmp_proveedores.find(x=>x.id===id);
   if(!p) return;
-  const rubroOpts = ['materiales','subcontrato','equipos','general'].map(r=>`<option value="${r}" ${p.rubro===r?'selected':''}>${{materiales:'Materiales',subcontrato:'Subcontrato',equipos:'Equipos',general:'General'}[r]}</option>`).join('');
+  const rubroOpts = ['materiales','equipos','subcontrato'].map(r=>`<option value="${r}" ${p.rubro===r?'selected':''}>${{materiales:'Materiales',equipos:'Equipos y Herramientas',subcontrato:'Subcontrato'}[r]}</option>`).join('');
   document.getElementById('mc').innerHTML=`<div class="modal" style="max-width:500px">
     <div class="mh"><span style="font-weight:700;font-size:15px;color:#fff">Editar Proveedor</span>
       <button onclick="closeMod()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;cursor:pointer;padding:2px 10px;border-radius:5px">✕</button>
@@ -5555,7 +5581,7 @@ function cmp_renderProv(){
   cmp_proveedores = cmp_loadProveedores(); /* refrescar desde localStorage */
   if(!cmp_proveedores.length){ empty.style.display='block'; list.innerHTML=''; return; }
   empty.style.display='none';
-  const rubroLabel = {materiales:'Materiales',subcontrato:'Subcontrato',equipos:'Equipos',general:'General'};
+  const rubroLabel = {materiales:'Materiales',equipos:'Equipos y Herramientas',subcontrato:'Subcontrato'};
   list.innerHTML = cmp_proveedores.map(p=>`
     <div class="cmp-prov-card">
       <div style="width:36px;height:36px;border-radius:50%;background:var(--navy-lt);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--navy);font-weight:700;font-family:var(--ff)">${(p.nombre||'?').charAt(0).toUpperCase()}</div>
