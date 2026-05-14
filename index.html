@@ -353,6 +353,7 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
 .cmp-estado.enviada{background:#dbeafe;color:#1e40af}
 .cmp-estado.respondida{background:#dcfce7;color:#166534}
 .cmp-estado.cotizacion_aceptada{background:#fef08a;color:#713f12;border:1px solid #ca8a04}
+.cmp-estado.aprobacion_para_oc{background:#dbeafe;color:#0369a1;border:1px solid #0369a1}
 .cmp-estado.emitida{background:#fef9c3;color:#854d0e}
 .cmp-estado.parcial{background:#ffedd5;color:#9a3412}
 .cmp-estado.recibida{background:#dcfce7;color:#166534}
@@ -1018,6 +1019,7 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
           <button class="bs" onclick="cmp_buildLista()" style="background:var(--navy);color:#fff;border-color:var(--navy);font-weight:600">↻ Actualizar lista</button>
           <button class="bs addp" onclick="cmp_newSC()" style="background:#166534;color:#fff;border-color:#166534;font-weight:600">+ Nueva SC</button>
           <button class="bs addp" onclick="cmp_newOC()" style="background:var(--amber);color:#fff;border-color:var(--amber);font-weight:600">+ Nueva OC</button>
+          <button class="bs" onclick="cmp_openSettings()" style="font-size:16px;padding:4px 10px" title="Configuración de aprobación">⚙️</button>
         </div>
 
         <!-- Sub-tabs internos -->
@@ -4795,6 +4797,46 @@ function cmp_rowHtml(lm){
   </tr>`;
 }
 
+/* ── Configuración de aprobación para OC ── */
+function cmp_openSettings(){
+  const aprobacionEnviara = CFG.aprobacionEnviara || 'profesional';
+  
+  document.getElementById('mc').innerHTML=`<div class="modal" style="max-width:500px">
+    <div class="mh"><span style="font-weight:700;font-size:15px;color:#fff">Configuración de Aprobación para OC</span>
+      <button onclick="closeMod()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;cursor:pointer;padding:2px 10px;border-radius:5px">✕</button>
+    </div>
+    <div style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:8px;font-family:var(--ff)">ENVIAR APROBACIÓN A:</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;gap:8px;align-items:center;font-size:calc(12px * var(--font-scale));font-family:var(--ff);cursor:pointer">
+            <input type="radio" name="aprobacion-destino" value="profesional" ${aprobacionEnviara==='profesional'?'checked':''} style="accent-color:var(--navy)">
+            <span>Profesional a cargo</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center;font-size:calc(12px * var(--font-scale));font-family:var(--ff);cursor:pointer">
+            <input type="radio" name="aprobacion-destino" value="oficina" ${aprobacionEnviara==='oficina'?'checked':''} style="accent-color:var(--navy)">
+            <span>Oficina central</span>
+          </label>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px">
+        <button class="btn-p" onclick="closeMod()" style="background:var(--bg2);color:var(--txt);border:1.5px solid var(--border2)">Cancelar</button>
+        <button class="btn-p blue" onclick="cmp_saveSettings()">Guardar</button>
+      </div>
+    </div>
+  </div>\`;
+  document.getElementById('ov').style.display='block';
+}
+
+function cmp_saveSettings(){
+  const selected = document.querySelector('input[name="aprobacion-destino"]:checked');
+  if(selected){
+    CFG.aprobacionEnviara = selected.value;
+    saveCFG();
+  }
+  closeMod();
+}
+
 /* ── Nueva Solicitud de Cotización ── */
 function cmp_newSC(){
   const num = 'SC-' + String(comprasData.solicitudes.length+1).padStart(3,'0');
@@ -4828,7 +4870,7 @@ function cmp_renderSC(){
   const scs = comprasData.solicitudes;
   if(!scs.length){ empty.style.display='block'; list.innerHTML=''; return; }
   empty.style.display='none';
-  const estadoLabel = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada'};
+  const estadoLabel = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada',aprobacion_para_oc:'Aprobación para OC'};
   list.innerHTML = scs.map(sc=>{
     const pCount = sc.items.length;
     const prvNames = sc.proveedores.map(pid=>{ const p=cmp_proveedores.find(x=>x.id===pid); return p?p.nombre:'?'; }).join(', ')||'Sin proveedor';
@@ -4867,7 +4909,7 @@ function cmp_editSC(id){
   if(!sc) return;
   const lm = comprasData.listaMateriales;
   const provs = cmp_proveedores;
-  const estados = ['borrador','enviada','respondida','cotizacion_aceptada'];
+  const estados = ['borrador','enviada','respondida','cotizacion_aceptada','aprobacion_para_oc'];
 
   const itemsHtml = lm.length ? lm.map(m=>{
     const checked = sc.items.find(si=>si.lmId===m.id) ? 'checked' : '';
@@ -4939,7 +4981,7 @@ function cmp_editSC(id){
     const historialHtml = sc.historial.map(h => {
       const fecha = new Date(h.timestamp);
       const fechaFormato = fecha.toLocaleDateString('es-CL') + ' ' + fecha.toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'});
-      const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada'};
+      const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada',aprobacion_para_oc:'Aprobación para OC'};
       return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;font-family:var(--ff)">
         <div style="font-weight:600;color:var(--navy)">${estadoLabels[h.estado] || h.estado}</div>
         <div style="color:var(--txt2);font-size:10px">${fechaFormato}</div>
@@ -4967,7 +5009,7 @@ function cmp_saveSC(id){
   if(sc.estado !== estadoAnterior){
     if(!sc.historial) sc.historial = [];
     const ahora = new Date().toISOString();
-    const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotizacion Aceptada'};
+    const estadoLabels = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotizacion Aceptada',aprobacion_para_oc:'Aprobación para OC'};
     sc.historial.push({
       estado: sc.estado,
       timestamp: ahora,
@@ -5375,7 +5417,7 @@ function cmp_printSC(id){
     ? `<img src="${CFG.logoDataUrl}" style="max-height:52px;max-width:140px;object-fit:contain"/>`
     : '';
   const _colorHdr = CFG.colorHeader||'#1e3a5f';
-  const estadoLabel = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada'};
+  const estadoLabel = {borrador:'Borrador',enviada:'Enviada',respondida:'Respondida',cotizacion_aceptada:'Cotización Aceptada',aprobacion_para_oc:'Aprobación para OC'};
 
   const win = window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
