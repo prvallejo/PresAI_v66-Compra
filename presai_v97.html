@@ -865,7 +865,7 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
           <span style="font-size:13px">⚡</span> Módulos <span class="mod-chevron">▼</span>
         </button>
         <div class="mod-dropdown" id="modDropdown">
-          <div class="mod-dd-header">Módulos disponibles</div>
+          <div class="mod-dd-header">Módulos Activos</div>
           <div class="mod-dd-item" onclick="switchToModule('presupuesto')">
             <span class="mod-icon">📋</span>
             <span class="mod-name">Presupuesto</span>
@@ -876,15 +876,12 @@ body{font-family:var(--ff);color:var(--txt);font-size:calc(14px * var(--font-sca
             <span class="mod-name">Compras</span>
             <span class="mod-status"></span>
           </div>
-      <div class="mod-dd-item disabled" title="Próximamente">
+          <div class="mod-dd-divider" style="height:1px;background:var(--border);margin:6px 0"></div>
+          <div class="mod-dd-header">Próximamente</div>
+          <div class="mod-dd-item disabled" title="Próximamente">
             <span class="mod-icon">💰</span>
             <span class="mod-name">Gastos</span>
             <span class="mod-status"><span class="mod-dot"></span>Próximamente</span>
-          </div>
-          <div class="mod-dd-divider" style="height:1px;background:var(--border);margin:6px 0"></div>
-          <div class="mod-dd-item" onclick="switchToModule('presupuesto')" style="color:var(--txt2);font-size:11px">
-            <span style="font-size:12px">←</span>
-            <span>Volver a Presupuesto</span>
           </div>
           <div class="mod-dd-item disabled" title="Próximamente">
             <span class="mod-icon">📅</span>
